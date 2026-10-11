@@ -67,28 +67,28 @@ export function MicrophoneHero({ mic, wsUp, pc2Online, busy, currentJobState }: 
     };
   }, [mic]);
 
-  let statusBadge = "พร้อมรับคำสั่งเสียง";
+  let statusBadge = "Ready — speak English";
   let statusBadgeClass = "badge-ready";
   if (!wsUp) {
-    statusBadge = "กำลังเชื่อมต่อเซิร์ฟเวอร์ PC1…";
+    statusBadge = "Connecting to PC1…";
     statusBadgeClass = "badge-connecting";
   } else if (pc2Online === false) {
-    statusBadge = "PC2 ออฟไลน์ (รอเครื่องปลายทาง)";
+    statusBadge = "PC2 offline (waiting for the PC)";
     statusBadgeClass = "badge-offline";
   } else if (isRecording) {
-    statusBadge = "กำลังฟังเสียงของคุณ…";
+    statusBadge = "Listening…";
     statusBadgeClass = "badge-listening";
   } else if (currentJobState === "transcribing") {
-    statusBadge = "Whisper กำลังถอดเสียง…";
+    statusBadge = "Transcribing…";
     statusBadgeClass = "badge-processing";
   } else if (currentJobState === "planning") {
-    statusBadge = "AI กำลังวางแผนคำสั่ง…";
+    statusBadge = "Planning…";
     statusBadgeClass = "badge-processing";
   } else if (currentJobState === "awaiting_confirm") {
-    statusBadge = "รอการยืนยันความปลอดภัย";
+    statusBadge = "Waiting for your confirmation";
     statusBadgeClass = "badge-warning";
   } else if (busy) {
-    statusBadge = "PC กำลังประมวลผลคำสั่ง…";
+    statusBadge = "PC is working…";
     statusBadgeClass = "badge-processing";
   }
 
@@ -122,11 +122,11 @@ export function MicrophoneHero({ mic, wsUp, pc2Online, busy, currentJobState }: 
           aria-label={
             isRecording
               ? mic.mode === "hold"
-                ? "ปล่อยนิ้วเพื่อส่งคำสั่งเสียง"
-                : "แตะเพื่อส่งคำสั่งเสียง"
+                ? "Release to send"
+                : "Tap to send"
               : mic.mode === "hold"
-              ? "กดค้างไว้เพื่อพูดคำสั่งเสียง"
-              : "แตะเพื่อเริ่มพูดคำสั่งเสียง"
+              ? "Hold and speak English"
+              : "Tap and speak English"
           }
           {...(mic.mode === "hold"
             ? {
@@ -154,11 +154,11 @@ export function MicrophoneHero({ mic, wsUp, pc2Online, busy, currentJobState }: 
           <span className="mic-action-label">
             {isRecording
               ? mic.mode === "hold"
-                ? "ปล่อยเพื่อส่ง"
-                : "แตะเพื่อส่ง"
+                ? "Release to send"
+                : "Tap to send"
               : mic.mode === "hold"
-              ? "กดค้างเพื่อพูด"
-              : "แตะเพื่อเริ่มพูด"}
+              ? "Hold to talk"
+              : "Tap to talk"}
           </span>
         </button>
       </div>
@@ -175,39 +175,39 @@ export function MicrophoneHero({ mic, wsUp, pc2Online, busy, currentJobState }: 
             type="button"
             className={`mode-pill ${mic.mode === "hold" ? "active" : ""}`}
             onClick={() => mic.setMode("hold")}
-            title="กดค้างขณะพูด แล้วปล่อยเพื่อส่ง"
+            title="Hold while speaking, release to send"
           >
-            โหมดกดค้าง (Hold)
+            Hold to talk
           </button>
           <button
             type="button"
             className={`mode-pill ${mic.mode === "tap" ? "active" : ""}`}
             onClick={() => mic.setMode("tap")}
-            title="แตะหนึ่งครั้งเพื่อเริ่มพูด และแตะอีกครั้งเพื่อส่ง"
+            title="Tap once to start, tap again to send"
           >
-            โหมดแตะสลับ (Tap)
+            Tap to toggle
           </button>
         </div>
-        <p className="shortcut-hint">กด Spacebar ค้างเพื่อพูดได้เช่นกัน</p>
+        <p className="shortcut-hint">You can also hold the Spacebar to talk</p>
       </div>
 
       {/* Error & Warning Diagnostic Hints */}
       {mic.state === "denied" && (
         <div className="hint-card hint-error">
-          <strong>ไม่ได้รับสิทธิ์เข้าถึงไมโครโฟน</strong>
-          <p>กรุณากดไอคอนรูปกุญแจ/การตั้งค่าที่แถบ URL ของเบราว์เซอร์ แล้วเลือก อนุญาต (Allow) การใช้งาน Microphone หรือพิมพ์คำสั่งด้านล่างแทน</p>
+          <strong>Microphone access was denied</strong>
+          <p>Tap the lock/settings icon in the address bar and allow the microphone, or type your command below.</p>
         </div>
       )}
       {mic.state === "insecure" && (
         <div className="hint-card hint-warn">
-          <strong>เบราว์เซอร์จำกัดสิทธิ์ความปลอดภัย (Insecure Context)</strong>
-          <p>ไมโครโฟนบนอุปกรณ์มือถือใช้งานได้เฉพาะผ่าน HTTPS เท่านั้น กรุณาเข้าใช้งานผ่านที่อยู่ https:// ของ PC1 หรือใช้การพิมพ์คำสั่ง</p>
+          <strong>Microphone needs HTTPS</strong>
+          <p>Browsers only allow the microphone over HTTPS. Open the https:// address of this app, or type your command.</p>
         </div>
       )}
       {mic.state === "unsupported" && (
         <div className="hint-card hint-info">
-          <strong>เบราว์เซอร์นี้ไม่รองรับ MediaRecorder API</strong>
-          <p>คุณสามารถพิมพ์คำสั่งในช่องด้านล่างเพื่อสั่งการเครื่องคอมพิวเตอร์แทนได้ทันที</p>
+          <strong>This browser cannot record audio</strong>
+          <p>Type your command in the box below instead.</p>
         </div>
       )}
     </div>

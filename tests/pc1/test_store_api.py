@@ -7,8 +7,6 @@ import time
 import pytest
 from fastapi.testclient import TestClient
 
-from app.adapters.notify import Broadcaster
-from app.api.app import create_app
 from app.core.orchestrator import Orchestrator, OrchestratorConfig
 
 
@@ -39,15 +37,6 @@ def test_tc_f18_history_newest_first_limit_50(store):
 
 
 # ---------------------------------------------------------------- API
-@pytest.fixture
-def api(rig):
-    bus = Broadcaster()
-    rig.orch.notify = bus
-    app = create_app(rig.orch, rig.store, bus)
-    token = rig.store.create_device("phone")
-    with TestClient(app) as client:
-        client.headers["Authorization"] = f"Bearer {token}"
-        yield client, rig, token
 
 
 def _wait_state(client, job_id, states, timeout=3.0):

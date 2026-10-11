@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 import type { Job } from "./api";
 import {
-  STATE_TH,
-  STATE_DESC_TH,
+  STATE_LABEL,
+  STATE_DESC,
   describeCall,
   formatDuration,
   formatTime,
@@ -41,7 +41,7 @@ describe("labels", () => {
 
   it("describes the real call for the confirm card", () => {
     expect(describeCall("send_message", { to: "mom", text: "<b>hi</b>" })).toEqual([
-      "เครื่องมือ: send_message",
+      "Tool: send_message",
       "to: mom",
       "text: <b>hi</b>",
     ]);
@@ -56,8 +56,8 @@ describe("labels", () => {
   it("formats durations accurately", () => {
     expect(formatDuration(undefined)).toBe("");
     expect(formatDuration(450)).toBe("450 ms");
-    expect(formatDuration(1200)).toBe("1.20 วินาที");
-    expect(formatDuration(3500)).toBe("3.50 วินาที");
+    expect(formatDuration(1200)).toBe("1.20 s");
+    expect(formatDuration(3500)).toBe("3.50 s");
   });
 
   it("formats timestamps cleanly", () => {
@@ -83,15 +83,15 @@ describe("labels", () => {
     ];
 
     for (const s of states) {
-      expect(STATE_TH[s]).toBeDefined();
-      expect(STATE_DESC_TH[s]).toBeDefined();
+      expect(STATE_LABEL[s]).toBeDefined();
+      expect(STATE_DESC[s]).toBeDefined();
     }
   });
 
   it("formats risk levels accurately", () => {
-    expect(riskLabel(0)).toContain("ระดับ 0");
-    expect(riskLabel(1)).toContain("ระดับ 1");
-    expect(riskLabel(4)).toContain("ระดับ 4");
-    expect(riskLabel(99)).toContain("ระดับความเสี่ยงที่ 99");
+    expect(riskLabel(0)).toContain("Level 0");
+    expect(riskLabel(1)).toContain("Level 1");
+    expect(riskLabel(4)).toContain("Level 4");
+    expect(riskLabel(99)).toContain("Risk level 99");
   });
 });

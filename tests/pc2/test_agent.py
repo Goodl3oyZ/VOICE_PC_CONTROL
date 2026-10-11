@@ -217,5 +217,28 @@ def test_audit_chain_written_and_verifiable(agent, cfg):
     assert not log.verify()
 
 
+def test_media_control_sends_keys(agent, launcher):
+    client, _ = agent
+    r = call(client, "/tool/media_control", {"action": "volume_up", "steps": 3}).json()
+    assert r["ok"] and r["data"]["steps"] == 3 and launcher.keys == [0xAF, 0xAF, 0xAF]
+    call(client, "/tool/media_control", {"action": "next", "steps": 9})  # steps only apply to volume
+    assert launcher.keys[-1] == 0xB0 and len(launcher.keys) == 4
+
+
+def test_search_web_opens_encoded_url(agent, launcher):
+    client, _ = agent
+    r = call(client, "/tool/search_web", {"query": "docker & windows", "site": "google"}).json()
+    assert r["ok"] and r["verified"]
+    assert launcher.launched == [["C:/chrome.exe", "https://www.google.com/search?q=docker+%26+windows"]]
+
+
+@pytest.mark.security
+def test_media_rejected_with_kill_switch(agent, launcher):
+    client, app = agent
+    app.state.kill.set(True)
+    r = call(client, "/tool/media_control", {"action": "mute"}).json()
+    assert r["error"] == "policy deny: kill switch on" and launcher.keys == []
+
+
 def test_signature_helper_is_deterministic():
     assert sign(SECRET, "post", "/a", "1", "n", b"") == sign(SECRET, "POST", "/a", "1", "n", b"")

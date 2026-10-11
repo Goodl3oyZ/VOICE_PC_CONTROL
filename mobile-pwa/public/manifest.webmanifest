@@ -8,7 +8,7 @@
   "orientation": "any",
   "background_color": "#0a0d14",
   "theme_color": "#0a0d14",
-  "lang": "th",
+  "lang": "en",
   "categories": ["utilities", "productivity"],
   "icons": [
     {
@@ -26,9 +26,9 @@
   ],
   "shortcuts": [
     {
-      "name": "สั่งการด้วยเสียง",
-      "short_name": "พูดคำสั่ง",
-      "description": "เปิดระบบรับคำสั่งเสียงทันที",
+      "name": "Voice command",
+      "short_name": "Speak",
+      "description": "Start a voice command (English)",
       "url": "/#voice",
       "icons": [{ "src": "/icon.svg", "sizes": "any" }]
     }

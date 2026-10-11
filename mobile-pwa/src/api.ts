@@ -1,4 +1,4 @@
-// Thin client for the PC1 orchestrator API (doc appendix ก.2).
+// Thin client for the PC1 orchestrator API (doc appendix A.2).
 
 export type JobState =
   | "created" | "transcribing" | "planning" | "clarifying" | "routing" | "awaiting_confirm"
@@ -77,6 +77,7 @@ export class Api {
     return this.req<Job>("POST", "/command/audio", form, false);
   };
 
+  cancel = (id: string) => this.req<Job>("POST", `/jobs/${encodeURIComponent(id)}/cancel`);
   reply = (id: string, text: string) => this.req<Job>("POST", `/jobs/${encodeURIComponent(id)}/reply`, JSON.stringify({ text }));
   confirm = (id: string, approve: boolean, args_hash: string) =>
     this.req<Job>("POST", `/confirm/${encodeURIComponent(id)}`, JSON.stringify({ approve, args_hash }));

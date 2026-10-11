@@ -9,12 +9,12 @@ interface CommandInputProps {
 }
 
 const QUICK_SUGGESTIONS = [
-  "เปิด Google Chrome",
-  "เปิด Spotify",
-  "เปิด Notepad",
-  "ปิดเสียง",
-  "เพิ่มเสียง 20%",
-  "ตรวจสถานะเครื่อง",
+  "Open Chrome",
+  "Play lofi on YouTube",
+  "Next song",
+  "Mute",
+  "Volume up 20%",
+  "Status",
 ];
 
 export function CommandInput({ onSubmitText, busy, error, onClearError }: CommandInputProps) {
@@ -37,9 +37,9 @@ export function CommandInput({ onSubmitText, busy, error, onClearError }: Comman
   return (
     <div className="command-input-container">
       {/* Suggestion Chips */}
-      <div className="suggestion-chips-bar" aria-label="คำสั่งตัวอย่าง">
+      <div className="suggestion-chips-bar" aria-label="Example commands">
         <span className="chips-label">
-          <SparklesIcon size={14} /> แนะนำ:
+          <SparklesIcon size={14} /> Try:
         </span>
         <div className="chips-scroll">
           {QUICK_SUGGESTIONS.map((sugg) => (
@@ -66,19 +66,19 @@ export function CommandInput({ onSubmitText, busy, error, onClearError }: Comman
               setText(e.target.value);
               if (error) onClearError();
             }}
-            placeholder="หรือพิมพ์คำสั่ง เช่น เปิด YouTube, ปิดเครื่อง…"
+            placeholder="Or type in English, e.g. open YouTube, next song…"
             maxLength={1000}
-            aria-label="พิมพ์คำสั่งเพื่อส่งไปยัง PC"
+            aria-label="Type a command for the PC"
           />
           <button
             type="submit"
             className="command-send-button"
             disabled={!text.trim()}
-            title="ส่งคำสั่ง"
-            aria-label="ส่งคำสั่ง"
+            title="Send command"
+            aria-label="Send command"
           >
             <SendIcon size={18} />
-            <span className="send-text">ส่ง</span>
+            <span className="send-text">Send</span>
           </button>
         </div>
       </form>
@@ -87,7 +87,7 @@ export function CommandInput({ onSubmitText, busy, error, onClearError }: Comman
       {busy && (
         <div className="input-hint-row queue-hint">
           <span className="pulse-indicator cyan" />
-          <span>มีงานกำลังทำงานอยู่ — คำสั่งใหม่จะถูกจัดเข้าคิวอัตโนมัติ</span>
+          <span>A command is still running — new commands are queued automatically</span>
         </div>
       )}
 
@@ -95,7 +95,7 @@ export function CommandInput({ onSubmitText, busy, error, onClearError }: Comman
         <div className="input-error-banner" role="alert">
           <AlertCircleIcon size={16} />
           <span className="error-text">{error}</span>
-          <button type="button" className="error-dismiss" onClick={onClearError} aria-label="ปิดข้อความผิดพลาด">
+          <button type="button" className="error-dismiss" onClick={onClearError} aria-label="Dismiss error">
             ✕
           </button>
         </div>

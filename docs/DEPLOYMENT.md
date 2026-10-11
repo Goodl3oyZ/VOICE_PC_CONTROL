@@ -131,6 +131,8 @@ Open `https://pc.<domain>` → **Sign in with Google** → enter the Secret Key 
 ### `/etc/voice-pc-control.env` (orchestrator)
 | Variable | Value on ai-lxc | Notes |
 |---|---|---|
+| `VPC_LANGUAGE` | `en` | English-only: Whisper auto-detects the language, non-English commands are rejected; `th` = Thai pipeline |
+| `VPC_STT_CONF_MIN` | `0.55` | below this Whisper confidence the app asks "I heard … is that right?" (never for Stop) |
 | `VPC_STT` / `VPC_STT_DEVICE` / `VPC_WHISPER_MODEL` | `faster_whisper` / `cpu` / `small` | GPU is left to the LLM |
 | `VPC_LLM` / `VPC_OLLAMA_MODEL` | `ollama` / `gemma4-e2b-qat` | benchmark winner (ADR-0002) |
 | `VPC_PC2` | `relay` | agent dials in to `/agent/ws`; `http` = old direct mode |
@@ -202,6 +204,9 @@ Get-Content $env:LOCALAPPDATA\voice-pc-agent\agent.log -Tail 20
 | PC2 shows offline | Agent not running / can't reach PC1 | `agent.log`; restart the task; check `pc1_ws_url`; PC1 log should say `agent connected` |
 | Agent: `could not bind` (old direct mode) | VPN interface down at logon | Use outbound mode (`pc1_ws_url`) — no binding needed |
 | Host very slow, SSH times out | 8 GB host swapping (several models / large context / other services) | Keep one model loaded, 16k context, stop unused heavy services |
+| Every voice command fails with `TypeError: open() got an unexpected keyword argument 'metadata_errors'` | faster-whisper 1.2.1 vs PyAV ≥ 19 | Fixed in code: audio is decoded by `decode_audio()` in our adapter (no dependency on faster-whisper's decoder) |
+| Jobs stuck in "Waiting for your answer" | Unanswered questions / restart | Cancel button on the job card; auto-expire after 5 min; startup recovery; Stop clears all |
+| "Only English is supported" | `VPC_LANGUAGE=en` and the command was not English | Speak/type English (by design) |
 | Calculator/Notepad "verified" but window not visible | App opened then closed, or opened on another desktop | Check PC2 screen; the agent verifies the process exists |
 
 ## 8. Rollback

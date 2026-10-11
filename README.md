@@ -1,12 +1,17 @@
 # Voice PC Control — ระบบสั่งงานคอมพิวเตอร์ด้วยเสียงผ่าน Local AI
 
-Speak a command in Thai on your phone, and a **local AI on your own server** understands it, checks it
-against safety rules, and makes your **Windows PC actually do it** — open apps and websites, report status,
-stop instantly. No cloud AI: speech-to-text and the LLM run on your hardware.
+Speak a command **in English** on your phone, and a **local AI on your own server** understands it, checks it
+against safety rules, and makes your **Windows PC actually do it** — open apps and websites, search, control
+music and volume, report status, stop instantly. No cloud AI: speech-to-text and the LLM run on your hardware.
 
-> "เปิดโครมให้หน่อย" → Chrome opens on the notebook → phone shows "เปิด Chrome แล้ว" (≈1 s)
-> "อยากจดอะไรหน่อย เปิดโปรแกรมจดบันทึกให้ที" → the LLM picks Notepad → opened and verified
-> "ลบไฟล์ทั้งหมดในไดรฟ์ซี" → refused, nothing runs
+> "Open Chrome" → Chrome opens on the notebook → phone shows "Opened Chrome" (≈1 s)
+> "I need to do some math, bring up a calculator" → the LLM picks Calculator → opened and verified
+> "Next song" / "Volume up 20%" / "Play lofi hip hop on YouTube" → media keys / YouTube search
+> "Delete all files on drive C" → refused, nothing runs
+
+> **English only.** Whisper `small` on this hardware is reliable in English but not in Thai, so the server
+> rejects commands in any other language with "Only English is supported…" instead of guessing
+> (`VPC_LANGUAGE=en`; the Thai pipeline is kept and can be re-enabled with `VPC_LANGUAGE=th`).
 
 Status: **Phase 1 (MVP) deployed** — see [CHECKLIST.md](CHECKLIST.md). Based on the design doc
 `ระบบสั่งงานคอมพิวเตอร์ด้วยเสียง.pdf` (Design Draft v2). Install & operations: **[docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)**.
@@ -127,13 +132,16 @@ Details: [security/THREAT_MODEL.md](security/THREAT_MODEL.md), [ADR-0003](docs/a
 
 | Works now | Refused by design | Later phases |
 |---|---|---|
-| Open allow-listed apps (Chrome, Notepad, Calculator, Explorer, Cursor) | Apps/sites not on the allowlist (e.g. `regedit`) | Phase 2: web search & reading, files/Office, confirm + taint for risky actions |
+| Open allow-listed apps (Chrome, Notepad, Calculator, Explorer, Cursor) | Apps/sites not on the allowlist (e.g. `regedit`) | Phase 2: read search results, play a YouTube video, tabs, files/Office |
 | Open allow-listed websites (YouTube, Google, GitHub…) | Deleting files, shell commands, payments | Phase 3: AI coding agent on git branches, run tests, diff/revert |
-| Status of PC2, Stop everything | Anything ambiguous → asks back instead of guessing | Phase 4: wake word, voice replies (TTS), Wake-on-LAN |
-| Understands intent ("อยากจดอะไร" → Notepad) via the LLM | | |
+| Search Google / YouTube (opens the results) | Commands not in English | Phase 4: wake word, voice replies (TTS), Wake-on-LAN |
+| Media keys: play/pause, next/previous, volume, mute (YouTube, Spotify) | Anything ambiguous → asks back instead of guessing | |
+| Status of PC2, Stop everything, cancel a single job | | |
+| Understands intent ("bring up a calculator") via the LLM | | |
 
-Measured: rule shortcuts ≈1 s end-to-end; LLM planning p50 0.46 s (p95 2.5 s) on the GTX 1650 SUPER;
-golden set: tool accuracy 100 %, dangerous commands executed 0, clarification 75 %.
+Measured (English golden set, gemma4-e2b-qat on the GTX 1650 SUPER): tool accuracy 95 %, refusal 100 %,
+clarification 100 %, dangerous commands executed 0, LLM planning p50 0.45 s. Speech-to-text ≈4–5 s per command on CPU
+(includes language detection used to reject non-English speech).
 
 ---
 

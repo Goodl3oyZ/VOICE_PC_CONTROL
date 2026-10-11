@@ -68,6 +68,12 @@ class SqliteStore:
                                     (max(1, min(limit, 200)),)).fetchall()
         return [json.loads(r["data"]) for r in rows]
 
+    def list_unfinished_jobs(self) -> list[dict[str, Any]]:
+        with self._lock:
+            rows = self._db.execute("SELECT data FROM jobs WHERE state NOT IN ('done','failed','cancelled') "
+                                    "ORDER BY created_at").fetchall()
+        return [json.loads(r["data"]) for r in rows]
+
     # -- events / metrics
     def add_event(self, job_id: str, stage: str, status: str, duration_ms: int, **extra: Any) -> None:
         with self._lock:

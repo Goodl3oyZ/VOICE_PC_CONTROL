@@ -11,8 +11,8 @@ from __future__ import annotations
 import hashlib
 import json
 from dataclasses import dataclass
-from typing import Any
-from urllib.parse import urlsplit
+from typing import Any, Literal
+from urllib.parse import quote_plus, urlsplit
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
@@ -47,6 +47,37 @@ class NoArgs(_Args):
     pass
 
 
+SEARCH_SITES = {
+    "google": "https://www.google.com/search?q=",
+    "youtube": "https://www.youtube.com/results?search_query=",
+}
+
+
+class SearchWebArgs(_Args):
+    query: str = Field(min_length=1, max_length=200, description="What to search for (Thai or English)")
+    site: Literal["google", "youtube"] = Field("google", description="google = web search, youtube = videos/music")
+
+    @field_validator("query")
+    @classmethod
+    def _printable(cls, v: str) -> str:
+        if any(ord(c) < 32 for c in v):
+            raise ValueError("control characters not allowed")
+        return v
+
+
+def search_url(site: str, query: str) -> str:
+    return SEARCH_SITES[site] + quote_plus(query)
+
+
+MEDIA_ACTIONS = ("play_pause", "next", "previous", "volume_up", "volume_down", "mute")
+
+
+class MediaControlArgs(_Args):
+    action: Literal["play_pause", "next", "previous", "volume_up", "volume_down", "mute"] = Field(
+        description="play_pause toggles play/pause; next/previous track; volume_up/down; mute toggles")
+    steps: int = Field(1, ge=1, le=25, description="Repeat count for volume (1 step = 2% volume)")
+
+
 @dataclass(frozen=True)
 class ToolSpec:
     name: str
@@ -60,10 +91,15 @@ class ToolSpec:
 TOOLS: dict[str, ToolSpec] = {
     spec.name: spec
     for spec in [
-        ToolSpec("open_app", 1, OpenAppArgs, "เปิดโปรแกรมที่อยู่ใน allowlist บน PC2", 1),
-        ToolSpec("open_url", 1, OpenUrlArgs, "เปิดเว็บ https ที่อนุญาตในเบราว์เซอร์ของ PC2", 1),
-        ToolSpec("get_status", 0, NoArgs, "ดูสถานะ PC2 และแอปที่เปิดอยู่", 1),
-        ToolSpec("stop_all", 0, NoArgs, "หยุดงานที่ทำอยู่ทั้งหมดทันที", 1),
+        ToolSpec("open_app", 1, OpenAppArgs, "Open an allowed app on PC2 (เปิดโปรแกรมที่อยู่ใน allowlist)", 1),
+        ToolSpec("open_url", 1, OpenUrlArgs, "Open an allowed https website in the PC2 browser (เปิดเว็บที่อนุญาต)", 1),
+        ToolSpec("get_status", 0, NoArgs, "Show PC2 status and which apps are running (ดูสถานะ PC2)", 1),
+        ToolSpec("stop_all", 0, NoArgs, "Stop everything that is running right now (หยุดงานทั้งหมด)", 1),
+        ToolSpec("search_web", 1, SearchWebArgs,
+                 "Search Google, or find videos/music on YouTube, and open the results in Chrome on PC2 (ค้นหา)", 1),
+        ToolSpec("media_control", 1, MediaControlArgs,
+                 "Control what is playing (Spotify, YouTube): play/pause, next/previous track, "
+                 "volume up/down, mute. 1 volume step = 2% (ควบคุมเพลงและเสียง)", 1),
     ]
 }
 

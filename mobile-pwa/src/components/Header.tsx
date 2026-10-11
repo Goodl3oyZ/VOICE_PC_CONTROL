@@ -48,18 +48,18 @@ export function Header({
           className={`link-status-pill ${
             pc2Online ? "online" : pc2Online === false ? "offline" : "pending"
           }`}
-          title={pc2Online ? "PC2 ออนไลน์" : "PC2 ไม่ได้เชื่อมต่อ"}
+          title={pc2Online ? "PC2 online" : "PC2 not connected"}
         >
           <span className="status-dot" />
           <span className="status-text">
-            PC2 {pc2Online ? "ออนไลน์" : pc2Online === false ? "ออฟไลน์" : "…"}
+            PC2 {pc2Online ? "online" : pc2Online === false ? "offline" : "…"}
           </span>
         </div>
 
         {!wsUp && (
-          <div className="ws-reconnect-pill" title="ขาดการเชื่อมต่อ WebSocket กับ PC1">
+          <div className="ws-reconnect-pill" title="Lost the live connection to PC1">
             <WifiOffIcon size={13} />
-            <span>เชื่อมต่อใหม่…</span>
+            <span>Reconnecting…</span>
           </div>
         )}
       </div>
@@ -71,11 +71,11 @@ export function Header({
           type="button"
           className="header-stop-button"
           onClick={onEmergencyStop}
-          aria-label="หยุดคำสั่งทันที (Emergency Stop)"
-          title="หยุดการทำงานคำสั่งทั้งหมดบน PC1 และ PC2 ทันที"
+          aria-label="Emergency stop"
+          title="Stop everything on PC1 and PC2 now"
         >
           <StopIcon size={16} />
-          <span className="stop-text">หยุด</span>
+          <span className="stop-text">STOP</span>
         </button>
 
         {/* PWA Install Button */}
@@ -84,8 +84,8 @@ export function Header({
             type="button"
             className="header-icon-button pwa-install-btn"
             onClick={onInstallPwa}
-            aria-label="ติดตั้งแอปพลิเคชัน"
-            title="ติดตั้ง Voice PC Remote เป็นแอปบนอุปกรณ์"
+            aria-label="Install app"
+            title="Install Voice PC Remote on this device"
           >
             <DownloadIcon size={18} />
           </button>
@@ -96,8 +96,8 @@ export function Header({
           type="button"
           className="header-icon-button"
           onClick={onToggleTheme}
-          aria-label={theme === "dark" ? "เปลี่ยนเป็นธีมสว่าง" : "เปลี่ยนเป็นธีมมืด"}
-          title={theme === "dark" ? "สลับเป็นโหมดสว่าง" : "สลับเป็นโหมดมืด"}
+          aria-label={theme === "dark" ? "Switch to light theme" : "Switch to dark theme"}
+          title={theme === "dark" ? "Light mode" : "Dark mode"}
         >
           {theme === "dark" ? <SunIcon size={18} /> : <MoonIcon size={18} />}
         </button>
@@ -107,8 +107,8 @@ export function Header({
           type="button"
           className="header-icon-button"
           onClick={onOpenSettings}
-          aria-label="การตั้งค่าอุปกรณ์และโทเค็น"
-          title="ตั้งค่า Device Token"
+          aria-label="Account and device"
+          title="Account and device"
         >
           <SettingsIcon size={18} />
         </button>

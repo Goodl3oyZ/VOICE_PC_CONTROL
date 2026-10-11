@@ -1,18 +1,19 @@
 import { useState, type FormEvent } from "react";
 import { ApiError, type Api, type AuthState } from "../api";
+import { EnglishOnlyNotice } from "./EnglishOnlyNotice";
 import { KeyIcon, LaptopIcon, ShieldAlertIcon } from "./Icons";
 
 const AUTH_ERRORS: Record<string, string> = {
-  not_allowed: "บัญชี Google นี้ไม่ได้รับอนุญาตให้ใช้งานระบบ",
-  state: "การล็อกอินหมดอายุหรือไม่ถูกต้อง กรุณาลองใหม่",
-  denied: "ยกเลิกการล็อกอินกับ Google แล้ว",
+  not_allowed: "This Google account is not allowed to use this app",
+  state: "The sign-in expired or was invalid, please try again",
+  denied: "Google sign-in was cancelled",
 };
 
 function authErrorFromUrl(): string | null {
   const code = new URLSearchParams(window.location.search).get("auth_error");
   if (!code) return null;
   window.history.replaceState(null, "", window.location.pathname);
-  return AUTH_ERRORS[code] ?? "ล็อกอินไม่สำเร็จ กรุณาลองใหม่";
+  return AUTH_ERRORS[code] ?? "Sign-in failed, please try again";
 }
 
 function guessDeviceLabel(): string {
@@ -36,26 +37,28 @@ export function LoginScreen({ auth }: { auth: AuthState }) {
             <LaptopIcon size={32} />
           </div>
           <h1>Voice PC Remote</h1>
-          <p className="setup-subtitle">ระบบควบคุมคอมพิวเตอร์ระยะไกลด้วยคำสั่งเสียง AI</p>
+          <p className="setup-subtitle">Control your computer remotely with voice commands and local AI</p>
         </div>
 
         <div className="setup-instruction-box">
           <div className="instruction-heading">
             <ShieldAlertIcon size={16} />
-            <span>ยืนยันตัวตน 2 ขั้น</span>
+            <span>Two-step sign-in</span>
           </div>
-          <p>1) ล็อกอินด้วยบัญชี Google ที่ได้รับอนุญาต</p>
-          <p className="instruction-foot">2) ใส่ Secret Key ครั้งแรกเพื่อผูกอุปกรณ์นี้ (ครั้งต่อไปไม่ต้องใส่อีก)</p>
+          <p>1) Sign in with an allowed Google account</p>
+          <p className="instruction-foot">2) Enter the Secret Key once to pair this device (not needed again)</p>
         </div>
+
+        <EnglishOnlyNotice compact />
 
         {error && <div className="setup-error-msg">{error}</div>}
 
         {auth.google_enabled ? (
           <a className="btn-setup-submit" href="/auth/google/login">
-            <span>เข้าสู่ระบบด้วย Google</span>
+            <span>Sign in with Google</span>
           </a>
         ) : (
-          <div className="setup-error-msg">ยังไม่ได้ตั้งค่า Google OAuth บนเซิร์ฟเวอร์</div>
+          <div className="setup-error-msg">Google sign-in is not configured on the server</div>
         )}
       </div>
     </div>
@@ -83,8 +86,8 @@ export function PairScreen({ api, auth, onPaired, onSignOut }: {
       .pair(key.trim(), label.trim() || "device")
       .then(onPaired)
       .catch((err: unknown) => {
-        if (err instanceof ApiError && err.status === 403) setError("Secret Key ไม่ถูกต้อง");
-        else if (err instanceof ApiError && err.status === 429) setError("ใส่ผิดหลายครั้งเกินไป กรุณารอ 15 นาที");
+        if (err instanceof ApiError && err.status === 403) setError("Wrong Secret Key");
+        else if (err instanceof ApiError && err.status === 429) setError("Too many wrong attempts, please wait 15 minutes");
         else setError(err instanceof Error ? err.message : String(err));
       })
       .finally(() => setBusy(false));
@@ -97,20 +100,20 @@ export function PairScreen({ api, auth, onPaired, onSignOut }: {
           <div className="setup-logo-badge">
             <KeyIcon size={32} />
           </div>
-          <h1>ผูกอุปกรณ์นี้</h1>
-          <p className="setup-subtitle">ล็อกอินแล้วในชื่อ {auth.email}</p>
+          <h1>Pair this device</h1>
+          <p className="setup-subtitle">Signed in as {auth.email}</p>
         </div>
 
         <div className="setup-instruction-box">
           <div className="instruction-heading">
             <KeyIcon size={16} />
-            <span>Secret Key อยู่ที่ไหน?</span>
+            <span>Where is the Secret Key?</span>
           </div>
-          <p>สร้างหรือเปลี่ยน key บนเซิร์ฟเวอร์ PC1 ด้วยคำสั่ง:</p>
+          <p>Create or rotate it on the PC1 server with:</p>
           <pre className="code-block">
             <code>vpc-cli set-pairing-key</code>
           </pre>
-          <p className="instruction-foot">ใส่ครั้งเดียวต่ออุปกรณ์ ถ้าเครื่องหายสามารถยกเลิกการผูกได้</p>
+          <p className="instruction-foot">Needed once per device. A lost device can be un-paired at any time.</p>
         </div>
 
         <form className="setup-form" onSubmit={submit}>
@@ -134,7 +137,7 @@ export function PairScreen({ api, auth, onPaired, onSignOut }: {
           <div className="form-field">
             <label htmlFor="pair-label" className="form-label">
               <LaptopIcon size={16} />
-              <span>ชื่ออุปกรณ์</span>
+              <span>Device name</span>
             </label>
             <input
               id="pair-label"
@@ -149,12 +152,12 @@ export function PairScreen({ api, auth, onPaired, onSignOut }: {
           {error && <div className="setup-error-msg">{error}</div>}
 
           <button type="submit" className="btn-setup-submit" disabled={!key.trim() || busy}>
-            <span>{busy ? "กำลังตรวจสอบ…" : "ผูกอุปกรณ์และเริ่มใช้งาน"}</span>
+            <span>{busy ? "Checking…" : "Pair device and start"}</span>
           </button>
         </form>
 
         <button type="button" className="btn-modal-logout" style={{ marginTop: 16 }} onClick={onSignOut}>
-          <span>ใช้บัญชี Google อื่น</span>
+          <span>Use another Google account</span>
         </button>
       </div>
     </div>

@@ -20,6 +20,16 @@ Legend: `[x]` done and covered by an automated test · `[~]` code exists but nee
 - [x] PC2 agent dials **out** to `wss://pc.flukelnwza.online/agent/ws` (HMAC challenge); no open port, no VPN — verified connected
 - [x] Public checks: anonymous/fake-token API calls → 401; Google login uses PKCE; 154 tests incl. real-socket relay E2E
 - [ ] Add `https://pc.flukelnwza.online/auth/google/callback` to the Google OAuth client (user action), create Secret Key, first phone login
+- [x] **Bug fixed — voice never worked in production:** faster-whisper 1.2.1 calls `av.open(metadata_errors=…)`, removed in PyAV 19 → every audio command failed with TypeError. Now decoded by our own PyAV code; verified on PC1 with PyAV 19.0.1 (webm/opus + Thai mp3, ~2.5 s)
+- [x] **Bug fixed — stuck "clarifying" jobs** could never be cleared (lost from memory after a restart): startup recovery, per-job cancel (`POST /jobs/{id}/cancel` + button), questions expire after 5 min, Stop also clears stale jobs
+- [x] New Phase-1 tools: `search_web` (Google / YouTube results in Chrome) and `media_control` (play/pause, next/previous, volume ±, mute via Windows media keys — works for YouTube and Spotify)
+- [ ] Thai STT accuracy: Whisper `small` misheard "เปิด" in 1 of 3 synthetic clips (asks to confirm when confidence < 0.7). Next: record ~30 real commands, measure CER, try a larger/Thai-tuned Whisper
+
+## Gate G1 status (2026-10-12): functionality complete, gate not formally passed yet
+- [x] Tool accuracy ≥ 90 % on golden set with the real model (100 %), 0 dangerous commands executed
+- [x] Security tests TC-S01/S02/S06/S11/S13-equivalent pass
+- [ ] Real voice from the phone end-to-end (blocked by the PyAV bug until now — needs the owner's phone test)
+- [ ] First-try success ≥ 85 % and p95 ≤ 8 s measured on real spoken commands
 - [x] PC2 = this notebook: agent (now outbound to PC1, see below), secret in Credential Manager, auto-start task "VoicePC Agent"
 - [x] Real network E2E: status 493 ms, open Notepad 872 ms (TC-F03), repeat → "already open" (TC-F04), calculator via URI, regedit + evil-site refused, no-token 401, audit chain OK
 - [x] HTTPS E2E from PC2: shortcut 1.3 s; LLM commands (intent → Notepad/Calculator) 6–30 s incl. first load; ambiguous → asks back; dangerous → refused

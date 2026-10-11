@@ -14,11 +14,12 @@ from .ollama_llm import OllamaLLM, parse_message
 
 class OpenAICompatLLM:
     def __init__(self, base_url: str = "http://127.0.0.1:10000", model: str = "", timeout: float = 30.0,
-                 api_key: str | None = None, client: httpx.AsyncClient | None = None):
+                 api_key: str | None = None, client: httpx.AsyncClient | None = None, language: str = "th"):
         self.model = model
         headers = {"Authorization": f"Bearer {api_key}"} if api_key else None
         self._client = client or httpx.AsyncClient(base_url=base_url, timeout=timeout, headers=headers)
         self._prompt = OllamaLLM.__new__(OllamaLLM)  # reuse message building only
+        self._prompt.language = language
 
     async def plan(self, text: str, ctx: PlanContext) -> PlanResult:
         messages: list[dict[str, Any]] = self._prompt._messages(text, ctx)

@@ -65,3 +65,19 @@ def risky_tool(monkeypatch):
     spec = tools_mod.ToolSpec("send_message", 3, SendMessageArgs, "send a message", 2)
     monkeypatch.setitem(tools_mod.TOOLS, "send_message", spec)
     return spec
+
+
+@pytest.fixture
+def api(rig):
+    """HTTP client for the API with a bearer device token (CLI/test mode)."""
+    from fastapi.testclient import TestClient
+
+    from app.adapters.notify import Broadcaster
+    from app.api.app import create_app
+    bus = Broadcaster()
+    rig.orch.notify = bus
+    app = create_app(rig.orch, rig.store, bus)
+    token = rig.store.create_device("phone")
+    with TestClient(app) as client:
+        client.headers["Authorization"] = f"Bearer {token}"
+        yield client, rig, token

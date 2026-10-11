@@ -23,8 +23,8 @@ export function OfflineBanner() {
     <div className="offline-banner" role="alert">
       <WifiOffIcon size={18} />
       <div className="offline-text">
-        <strong>อุปกรณ์ออฟไลน์ (ไม่มีการเชื่อมต่อเครือข่าย)</strong>
-        <span>คำสั่งเสียงและการควบคุมระยะไกลจำเป็นต้องเชื่อมต่อกับเครื่อง PC1 ผ่านเครือข่ายเดียวกัน</span>
+        <strong>You are offline</strong>
+        <span>Voice commands need an internet connection to reach PC1.</span>
       </div>
     </div>
   );

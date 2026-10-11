@@ -31,23 +31,23 @@ export function InstallPrompt() {
   };
 
   return (
-    <div className="install-prompt-banner" role="complementary" aria-label="ติดตั้งแอปพลิเคชัน">
+    <div className="install-prompt-banner" role="complementary" aria-label="Install app">
       <div className="install-prompt-content">
         <DownloadIcon size={20} className="install-icon" />
         <div className="install-prompt-text">
-          <strong>ติดตั้ง Voice PC Remote</strong>
-          <span>ใช้งานแบบเต็มหน้าจอ รวดเร็ว เสมือนแอปแท้บนเครื่อง</span>
+          <strong>Install Voice PC Remote</strong>
+          <span>Full screen and fast, like a native app</span>
         </div>
       </div>
       <div className="install-prompt-actions">
         <button type="button" className="btn-install-confirm" onClick={handleInstall}>
-          ติดตั้ง
+          Install
         </button>
         <button
           type="button"
           className="btn-install-dismiss"
           onClick={() => setDismissed(true)}
-          aria-label="ไม่ต้องแสดงอีก"
+          aria-label="Don't show again"
         >
           <XIcon size={16} />
         </button>

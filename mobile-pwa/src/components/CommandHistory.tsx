@@ -1,6 +1,6 @@
 import { useState, useMemo } from "react";
 import type { Job } from "../api";
-import { STATE_TH, formatDuration, formatTime, isActive } from "../labels";
+import { STATE_LABEL, formatDuration, formatTime, isActive } from "../labels";
 import {
   AlertCircleIcon,
   CheckCircleIcon,
@@ -48,11 +48,11 @@ export function CommandHistory({ jobs, onSelectJob }: CommandHistoryProps) {
   };
 
   return (
-    <section className="history-section" aria-label="ประวัติคำสั่ง">
+    <section className="history-section" aria-label="Command history">
       <div className="history-header">
         <div className="history-title-group">
           <HistoryIcon size={18} />
-          <h2>ประวัติคำสั่งล่าสุด</h2>
+          <h2>Recent commands</h2>
           <span className="count-pill">{jobs.length}</span>
         </div>
 
@@ -63,28 +63,28 @@ export function CommandHistory({ jobs, onSelectJob }: CommandHistoryProps) {
             className={`filter-tab-btn ${filter === "all" ? "active" : ""}`}
             onClick={() => setFilter("all")}
           >
-            ทั้งหมด
+            All
           </button>
           <button
             type="button"
             className={`filter-tab-btn ${filter === "active" ? "active" : ""}`}
             onClick={() => setFilter("active")}
           >
-            กำลังทำ
+            Active
           </button>
           <button
             type="button"
             className={`filter-tab-btn ${filter === "done" ? "active" : ""}`}
             onClick={() => setFilter("done")}
           >
-            สำเร็จ
+            Done
           </button>
           <button
             type="button"
             className={`filter-tab-btn ${filter === "failed" ? "active" : ""}`}
             onClick={() => setFilter("failed")}
           >
-            ปัญหา
+            Issues
           </button>
         </div>
       </div>
@@ -97,15 +97,15 @@ export function CommandHistory({ jobs, onSelectJob }: CommandHistoryProps) {
             className="history-search-input"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="ค้นหาในประวัติคำสั่งหรือเครื่องมือ…"
-            aria-label="ค้นหาคำสั่ง"
+            placeholder="Search commands or tools…"
+            aria-label="Search commands"
           />
           {search && (
             <button
               type="button"
               className="search-clear-btn"
               onClick={() => setSearch("")}
-              aria-label="ล้างคำค้นหา"
+              aria-label="Clear search"
             >
               ✕
             </button>
@@ -119,14 +119,14 @@ export function CommandHistory({ jobs, onSelectJob }: CommandHistoryProps) {
           {jobs.length === 0 ? (
             <>
               <SparklesIcon size={28} className="empty-icon" />
-              <p className="empty-title">ยังไม่มีประวัติคำสั่ง</p>
-              <p className="empty-sub">กดไมโครโฟนเพื่อพูด หรือพิมพ์คำสั่งด้านบนเพื่อเริ่มต้นใช้งาน</p>
+              <p className="empty-title">No commands yet</p>
+              <p className="empty-sub">Press the microphone and speak English, or type a command above</p>
             </>
           ) : (
             <>
-              <p className="empty-title">ไม่พบรายการที่ตรงกับเงื่อนไข</p>
+              <p className="empty-title">Nothing matches the filter</p>
               <button type="button" className="btn-reset-filter" onClick={() => { setFilter("all"); setSearch(""); }}>
-                แสดงทั้งหมด
+                Show all
               </button>
             </>
           )}
@@ -166,12 +166,12 @@ export function CommandHistory({ jobs, onSelectJob }: CommandHistoryProps) {
                       ) : (
                         <span className="pulse-indicator-small" />
                       )}
-                      <span>{STATE_TH[j.state]}</span>
+                      <span>{STATE_LABEL[j.state]}</span>
                     </span>
                   </div>
 
                   <div className="history-command-text">
-                    {j.text || <em className="text-muted">(คำสั่งเสียง)</em>}
+                    {j.text || <em className="text-muted">(voice command)</em>}
                   </div>
 
                   <div className="history-right-meta">
@@ -197,21 +197,21 @@ export function CommandHistory({ jobs, onSelectJob }: CommandHistoryProps) {
                   <div className="history-expanded-body">
                     {j.summary && (
                       <div className="expanded-field">
-                        <span className="field-label">ผลลัพธ์:</span>
+                        <span className="field-label">Result:</span>
                         <div className="field-value summary-text">{j.summary}</div>
                       </div>
                     )}
 
                     {j.error && (
                       <div className="expanded-field error-field">
-                        <span className="field-label">ข้อผิดพลาด:</span>
+                        <span className="field-label">Error:</span>
                         <div className="field-value error-text">{j.error}</div>
                       </div>
                     )}
 
                     {j.steps && j.steps.length > 0 && (
                       <div className="expanded-field">
-                        <span className="field-label">ขั้นตอนการรันเครื่องมือ ({j.steps.length}):</span>
+                        <span className="field-label">Tool steps ({j.steps.length}):</span>
                         <div className="expanded-steps-list">
                           {j.steps.map((st, idx) => (
                             <div key={idx} className="expanded-step-item">
@@ -223,7 +223,7 @@ export function CommandHistory({ jobs, onSelectJob }: CommandHistoryProps) {
                               )}
                               {st.result && (
                                 <span className={`step-status-chip ${st.result.ok ? "ok" : "fail"}`}>
-                                  {st.result.ok ? "สำเร็จ" : "ล้มเหลว"}
+                                  {st.result.ok ? "OK" : "Failed"}
                                 </span>
                               )}
                             </div>
@@ -239,7 +239,7 @@ export function CommandHistory({ jobs, onSelectJob }: CommandHistoryProps) {
                           className="btn-select-job"
                           onClick={() => onSelectJob(j)}
                         >
-                          ตรวจสอบคำสั่งนี้
+                          Inspect this command
                         </button>
                       </div>
                     )}

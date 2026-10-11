@@ -44,6 +44,10 @@ class FakeLauncher:
         self.uris: list[str] = []
         self.process_for_uri: dict[str, str] = {}
         self.process_for_argv0: dict[str, str] = {}
+        self.keys: list[int] = []  # media/volume virtual keys sent
+
+    def send_key(self, vk: int) -> None:
+        self.keys.append(vk)
 
     def launch(self, argv: list[str]) -> None:
         self.launched.append(list(argv))

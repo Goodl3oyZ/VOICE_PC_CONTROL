@@ -21,8 +21,12 @@ class Knowledge:
         data = json.loads(Path(path).read_text(encoding="utf-8"))
         return cls(**{k: v for k, v in data.items() if not k.startswith("_")})
 
-    def display(self, app: str) -> str:
-        return self.apps.get(app, {}).get("display", app)
+    def display(self, app: str, language: str = "th") -> str:
+        entry = self.apps.get(app, {})
+        name = entry.get(f"display_{language}") or entry.get("display", app)
+        if language == "en" and any("\u0e00" <= ch <= "\u0e7f" for ch in name):
+            return app.title()  # no English display name configured
+        return name
 
     def prompt_summary(self) -> str:
         apps = ", ".join(f"{k} ({self.display(k)})" for k in self.apps)

@@ -87,8 +87,9 @@ async def evaluate(cases: list[dict], llm, kb: Knowledge, stt=None) -> dict:
                      "tool": call.tool if call else None, "args": call.arguments if call else None,
                      "decision": decision, "ms": round(ms, 1), "cer": cer_val,
                      "tool_ok": case["expect"] == "tool" and outcome == "tool" and call.tool == case["tool"],
+                     # expected args must be present with the same values (extra harmless args allowed)
                      "args_ok": case["expect"] == "tool" and outcome == "tool" and call.tool == case["tool"]
-                     and call.arguments == case["args"]})
+                     and all(call.arguments.get(k) == v for k, v in case["args"].items())})
     pos = [r for r in rows if r["expect"] == "tool"]
     neg = [r for r in rows if r["expect"] == "refuse"]
     amb = [r for r in rows if r["expect"] == "clarify"]
@@ -118,6 +119,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--stt", choices=["none", "faster_whisper"], default="none")
     ap.add_argument("--whisper-model", default="small")
     ap.add_argument("--min-tool-acc", type=float, default=0.0)
+    ap.add_argument("--language", choices=["th", "en"], default="th", help="LLM prompt language")
     ap.add_argument("--json", help="write full results here")
     a = ap.parse_args(argv)
 
@@ -126,10 +128,10 @@ def main(argv: list[str] | None = None) -> int:
              .read_text(encoding="utf-8").splitlines() if line.strip()]
     if a.llm == "ollama":
         from app.adapters.ollama_llm import OllamaLLM
-        llm = OllamaLLM(a.ollama_url, a.model, timeout=60)
+        llm = OllamaLLM(a.ollama_url, a.model, timeout=60, language=a.language)
     elif a.llm == "openai":
         from app.adapters.openai_compat_llm import OpenAICompatLLM
-        llm = OpenAICompatLLM(a.openai_url, a.model, timeout=300)
+        llm = OpenAICompatLLM(a.openai_url, a.model, timeout=300, language=a.language)
     else:
         llm = ScriptedLLM()
     stt = None

@@ -1,18 +1,18 @@
 import type { Job, JobState } from "./api";
 
-export const STATE_TH: Record<JobState, string> = {
-  created: "รับคำสั่งแล้ว",
-  transcribing: "กำลังถอดเสียง…",
-  planning: "กำลังวางแผน…",
-  clarifying: "รอคำตอบจากคุณ",
-  routing: "กำลังตรวจสิทธิ์…",
-  awaiting_confirm: "รอการยืนยันความปลอดภัย",
-  dispatching: "กำลังส่งไป PC2…",
-  running: "PC2 กำลังทำงาน…",
-  verifying: "กำลังตรวจผล…",
-  done: "เสร็จสิ้นแล้ว",
-  failed: "ไม่สำเร็จ",
-  cancelled: "ยกเลิกแล้ว",
+export const STATE_LABEL: Record<JobState, string> = {
+  created: "Received",
+  transcribing: "Transcribing…",
+  planning: "Planning…",
+  clarifying: "Waiting for your answer",
+  routing: "Checking permissions…",
+  awaiting_confirm: "Waiting for your confirmation",
+  dispatching: "Sending to PC2…",
+  running: "PC2 is working…",
+  verifying: "Verifying…",
+  done: "Done",
+  failed: "Failed",
+  cancelled: "Cancelled",
 };
 
 export const STATE_EN: Record<JobState, string> = {
@@ -30,19 +30,19 @@ export const STATE_EN: Record<JobState, string> = {
   cancelled: "Cancelled",
 };
 
-export const STATE_DESC_TH: Record<JobState, string> = {
-  created: "ระบบบันทึกคำสั่งและกำลังเข้าสู่คิวประมวลผล",
-  transcribing: "แปลงเสียงพูดเป็นข้อความด้วยโมเดล Whisper",
-  planning: "AI กำลังตีความหมายและเลือกคำสั่งหรือเครื่องมือที่เหมาะสม",
-  clarifying: "ระบบต้องการข้อมูลเพิ่มเติมเพื่อความถูกต้อง กรุณาตอบกลับด้านล่าง",
-  routing: "ตรวจสอบสิทธิ์ความปลอดภัยและระดับความเสี่ยงของคำสั่ง",
-  awaiting_confirm: "คำสั่งนี้มีผลกระทบต่อระบบ กรุณาตรวจสอบรายละเอียดก่อนอนุมัติ",
-  dispatching: "ส่งคำสั่งผ่านช่องทางความปลอดภัยไปยังเครื่อง PC เป้าหมาย",
-  running: "เครื่อง PC กำลังดำเนินการตามคำสั่ง",
-  verifying: "ตรวจสอบผลการดำเนินการว่าสำเร็จถูกต้องหรือไม่",
-  done: "การทำงานเสร็จสมบูรณ์เรียบร้อย",
-  failed: "เกิดข้อผิดพลาดในการประมวลผลหรือการสั่งการ",
-  cancelled: "คำสั่งถูกยกเลิกตามคำขอหรือหมดเวลา",
+export const STATE_DESC: Record<JobState, string> = {
+  created: "The command was received and is queued",
+  transcribing: "Converting your speech to text (Whisper)",
+  planning: "The AI is working out what to do",
+  clarifying: "Please answer the question below (in English)",
+  routing: "Checking permissions and risk level",
+  awaiting_confirm: "This action has an effect outside the PC — check the details before approving",
+  dispatching: "Sending the signed command to the PC",
+  running: "The PC is carrying out the command",
+  verifying: "Checking that it really worked",
+  done: "Completed successfully",
+  failed: "Something went wrong",
+  cancelled: "Cancelled by you or timed out",
 };
 
 export const TERMINAL: ReadonlySet<JobState> = new Set(["done", "failed", "cancelled"]);
@@ -51,19 +51,19 @@ export function isActive(job: Job): boolean {
   return !TERMINAL.has(job.state);
 }
 
-const RISK_TH = [
-  "ระดับ 0: อ่านอย่างเดียว (ปลอดภัย)",
-  "ระดับ 1: เปิดแอปพลิเคชันทั่วไป",
-  "ระดับ 2: แก้ไขในขอบเขตที่จำกัด",
-  "ระดับ 3: มีผลภายนอกหรือย้อนคืนยาก",
-  "ระดับ 4: คำสั่งระดับสูง / ห้ามโดยค่าเริ่มต้น",
+const RISK_LABELS = [
+  "Level 0: read-only (safe)",
+  "Level 1: open apps",
+  "Level 2: limited changes",
+  "Level 3: external effect / hard to undo",
+  "Level 4: forbidden by default",
 ];
 
-export const riskLabel = (risk: number) => RISK_TH[risk] ?? `ระดับความเสี่ยงที่ ${risk}`;
+export const riskLabel = (risk: number) => RISK_LABELS[risk] ?? `Risk level ${risk}`;
 
 /** Confirmation card text is built from the real tool + arguments, never from LLM prose (§20.5). */
 export function describeCall(tool: string, args: Record<string, unknown>): string[] {
-  return [`เครื่องมือ: ${tool}`, ...Object.entries(args).map(([k, v]) => `${k}: ${typeof v === "string" ? v : JSON.stringify(v)}`)];
+  return [`Tool: ${tool}`, ...Object.entries(args).map(([k, v]) => `${k}: ${typeof v === "string" ? v : JSON.stringify(v)}`)];
 }
 
 /** Merge an updated job into the newest-first list (max 50). */
@@ -84,12 +84,12 @@ export function secondsLeft(expiresAt: number, nowMs = Date.now()): number {
 export function formatDuration(ms?: number): string {
   if (ms === undefined || ms === null) return "";
   if (ms < 1000) return `${Math.round(ms)} ms`;
-  return `${(ms / 1000).toFixed(2)} วินาที`;
+  return `${(ms / 1000).toFixed(2)} s`;
 }
 
 export function formatTime(timestampSeconds: number): string {
   try {
-    return new Date(timestampSeconds * 1000).toLocaleTimeString("th-TH", {
+    return new Date(timestampSeconds * 1000).toLocaleTimeString("en-GB", {
       hour: "2-digit",
       minute: "2-digit",
       second: "2-digit",

@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import type { Api, Job } from "../api";
 import {
-  STATE_TH,
-  STATE_DESC_TH,
+  STATE_LABEL,
+  STATE_DESC,
   describeCall,
   formatDuration,
   riskLabel,
@@ -66,11 +66,11 @@ export function ActiveJobCard({ job, api, onError, onUpdate }: ActiveJobCardProp
           ) : (
             <SparklesIcon size={16} className="spin-slow" />
           )}
-          <span className="state-title">{STATE_TH[job.state]}</span>
+          <span className="state-title">{STATE_LABEL[job.state]}</span>
         </div>
 
         <div className="job-meta-pills">
-          <span className="job-source-pill">{job.source === "audio" ? "เสียงพูด" : "ข้อความ"}</span>
+          <span className="job-source-pill">{job.source === "audio" ? "Voice" : "Text"}</span>
           {job.timings_ms.total !== undefined && (
             <span className="job-timing-pill">
               <ClockIcon size={13} />
@@ -81,7 +81,7 @@ export function ActiveJobCard({ job, api, onError, onUpdate }: ActiveJobCardProp
       </div>
 
       {/* State explanation note */}
-      <p className="job-state-desc">{STATE_DESC_TH[job.state]}</p>
+      <p className="job-state-desc">{STATE_DESC[job.state]}</p>
 
       {/* Spoken / Prompt text */}
       {job.text && (
@@ -90,8 +90,8 @@ export function ActiveJobCard({ job, api, onError, onUpdate }: ActiveJobCardProp
           <span className="prompt-text">{job.text}</span>
           <span className="quote-mark">”</span>
           {job.stt_confidence !== null && job.stt_confidence !== undefined && (
-            <span className="stt-confidence" title="ความแม่นยำของการถอดเสียง">
-              ถอดเสียงแม่นยำ {(job.stt_confidence * 100).toFixed(0)}%
+            <span className="stt-confidence" title="Speech recognition confidence">
+              Recognition confidence {(job.stt_confidence * 100).toFixed(0)}%
             </span>
           )}
         </div>
@@ -102,7 +102,7 @@ export function ActiveJobCard({ job, api, onError, onUpdate }: ActiveJobCardProp
         <div className="clarification-panel">
           <div className="question-header">
             <SparklesIcon size={16} />
-            <span className="question-title">ระบบต้องการข้อมูลเพิ่มเติม:</span>
+            <span className="question-title">More information needed:</span>
           </div>
           <p className="clarification-question">{job.question}</p>
           <form className="clarification-form" onSubmit={handleClarifySubmit}>
@@ -110,13 +110,13 @@ export function ActiveJobCard({ job, api, onError, onUpdate }: ActiveJobCardProp
               type="text"
               value={answer}
               onChange={(e) => setAnswer(e.target.value)}
-              placeholder="พิมพ์คำตอบของคุณที่นี่…"
+              placeholder="Type your answer in English…"
               autoFocus
               maxLength={1000}
               className="clarification-input"
             />
             <button type="submit" className="clarification-submit" disabled={!answer.trim()}>
-              ตอบกลับ
+              Reply
             </button>
           </form>
         </div>
@@ -131,16 +131,16 @@ export function ActiveJobCard({ job, api, onError, onUpdate }: ActiveJobCardProp
               <div className="confirm-risk-title">{riskLabel(job.pending.risk)}</div>
               <div className="confirm-timer">
                 {remainingSecs > 0 ? (
-                  <>กรุณายืนยันภายใน <strong>{remainingSecs}</strong> วินาที</>
+                  <>Please confirm within <strong>{remainingSecs}</strong> seconds</>
                 ) : (
-                  <span className="expired">หมดเวลายืนยันแล้ว</span>
+                  <span className="expired">Confirmation expired</span>
                 )}
               </div>
             </div>
           </div>
 
           <div className="confirm-call-breakdown">
-            <div className="breakdown-label">พารามิเตอร์คำสั่งที่จะส่งไปยัง PC:</div>
+            <div className="breakdown-label">Parameters that will be sent to the PC:</div>
             <ul className="breakdown-list">
               {describeCall(job.pending.tool, job.pending.arguments).map((line) => (
                 <li key={line}>
@@ -158,7 +158,7 @@ export function ActiveJobCard({ job, api, onError, onUpdate }: ActiveJobCardProp
               onClick={() => act(api.confirm(job.id, true, job.pending!.args_hash))}
             >
               <CheckCircleIcon size={18} />
-              <span>อนุมัติคำสั่ง</span>
+              <span>Approve</span>
             </button>
             <button
               type="button"
@@ -166,7 +166,7 @@ export function ActiveJobCard({ job, api, onError, onUpdate }: ActiveJobCardProp
               onClick={() => act(api.confirm(job.id, false, job.pending!.args_hash))}
             >
               <XIcon size={18} />
-              <span>ยกเลิก</span>
+              <span>Cancel</span>
             </button>
           </div>
         </div>
@@ -177,7 +177,7 @@ export function ActiveJobCard({ job, api, onError, onUpdate }: ActiveJobCardProp
         <div className="job-steps-wrapper">
           <div className="steps-header">
             <CpuIcon size={14} />
-            <span>ขั้นตอนการดำเนินการบน PC ({job.steps.length} ขั้นตอน):</span>
+            <span>Steps on the PC ({job.steps.length}):</span>
           </div>
           <div className="steps-list">
             {job.steps.map((st, idx) => (
@@ -186,8 +186,8 @@ export function ActiveJobCard({ job, api, onError, onUpdate }: ActiveJobCardProp
                 <span className="step-tool">{st.tool}</span>
                 {st.result && (
                   <span className={`step-badge ${st.result.ok ? "badge-success" : "badge-error"}`}>
-                    {st.result.ok ? "สำเร็จ" : "ล้มเหลว"}
-                    {st.result.verified && " (ตรวจแล้ว)"}
+                    {st.result.ok ? "OK" : "Failed"}
+                    {st.result.verified && " (verified)"}
                   </span>
                 )}
               </div>
@@ -199,7 +199,7 @@ export function ActiveJobCard({ job, api, onError, onUpdate }: ActiveJobCardProp
       {/* Summary report */}
       {job.summary && job.state !== "clarifying" && (
         <div className="job-summary-box">
-          <div className="summary-title">ผลลัพธ์การทำงาน:</div>
+          <div className="summary-title">Result:</div>
           <div className="summary-body">{job.summary}</div>
         </div>
       )}
@@ -217,23 +217,31 @@ export function ActiveJobCard({ job, api, onError, onUpdate }: ActiveJobCardProp
         <div className="job-timings-grid">
           {job.timings_ms.stt !== undefined && (
             <div className="timing-chip">
-              <span className="label">ถอดเสียง:</span>
+              <span className="label">Speech:</span>
               <span className="val">{formatDuration(job.timings_ms.stt)}</span>
             </div>
           )}
-          {job.timings_ms.planning !== undefined && (
+          {job.timings_ms.plan !== undefined && (
             <div className="timing-chip">
-              <span className="label">วางแผน:</span>
-              <span className="val">{formatDuration(job.timings_ms.planning)}</span>
+              <span className="label">Planning:</span>
+              <span className="val">{formatDuration(job.timings_ms.plan)}</span>
             </div>
           )}
-          {job.timings_ms.exec !== undefined && (
+          {job.timings_ms.tool !== undefined && (
             <div className="timing-chip">
-              <span className="label">สั่งการ PC:</span>
-              <span className="val">{formatDuration(job.timings_ms.exec)}</span>
+              <span className="label">PC action:</span>
+              <span className="val">{formatDuration(job.timings_ms.tool)}</span>
             </div>
           )}
         </div>
+      )}
+
+      {/* Cancel: clears a job that waits for an answer/confirmation or is still running */}
+      {!isTerminal && (
+        <button type="button" className="btn-modal-logout job-cancel-btn" onClick={() => act(api.cancel(job.id))}>
+          <XIcon size={14} />
+          <span>Cancel this job</span>
+        </button>
       )}
     </article>
   );

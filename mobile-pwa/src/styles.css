@@ -2197,5 +2197,22 @@ code, pre {
 }
 
 /* Google sign-in is a link styled as the primary button */
-a.btn-setup-submit { text-decoration: none; display: flex; }
+a.btn-setup-submit { text-decoration: none; display: flex; justify-content: center; }
 
+
+.job-cancel-btn { margin-top: 12px; align-self: flex-start; gap: 6px; }
+
+
+/* English-only notice (server rejects other languages) */
+.english-only-notice {
+  display: flex; gap: 12px; align-items: flex-start;
+  margin: 12px auto 0; width: calc(100% - 32px); max-width: 1328px;
+  padding: 10px 14px; border-radius: var(--radius-md);
+  background: var(--color-warning-bg); border: 1px solid var(--color-warning-border);
+  color: var(--text-primary); font-size: 0.92rem; line-height: 1.45;
+}
+.english-only-notice.compact { width: 100%; margin: 0 0 14px; font-size: 0.86rem; }
+.english-only-notice .eon-flag {
+  flex: none; font-weight: 800; font-size: 0.75rem; letter-spacing: 0.04em;
+  padding: 3px 7px; border-radius: var(--radius-xs); background: var(--color-warning); color: #111;
+}

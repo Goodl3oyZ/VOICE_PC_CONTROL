@@ -4,7 +4,7 @@
     "chrome": {"display": "Chrome"},
     "notepad": {"display": "Notepad"},
     "spotify": {"display": "Spotify"},
-    "calculator": {"display": "เครื่องคิดเลข"},
+    "calculator": {"display": "เครื่องคิดเลข", "display_en": "Calculator"},
     "explorer": {"display": "File Explorer"},
     "cursor": {"display": "Cursor"},
     "vscode": {"display": "VS Code"}

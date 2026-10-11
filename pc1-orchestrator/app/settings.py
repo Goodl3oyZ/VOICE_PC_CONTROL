@@ -17,6 +17,8 @@ class Settings:
     db_path: str = field(default_factory=lambda: _env("VPC_DB", str(BASE / "data" / "vpc.sqlite3")))
     knowledge_path: str = field(default_factory=lambda: _env("VPC_KNOWLEDGE",
                                                              str(BASE / "data" / "knowledge.json")))
+    # "en": English-only commands + English replies (Whisper is far more accurate in English on this hardware)
+    language: str = field(default_factory=lambda: _env("VPC_LANGUAGE", "en"))  # en | th
     stt: str = field(default_factory=lambda: _env("VPC_STT", "fake"))  # fake | faster_whisper
     whisper_model: str = field(default_factory=lambda: _env("VPC_WHISPER_MODEL", "small"))
     whisper_compute: str = field(default_factory=lambda: _env("VPC_WHISPER_COMPUTE", "int8"))

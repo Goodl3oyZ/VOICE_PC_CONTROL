@@ -13,6 +13,7 @@ import { LoginScreen, PairScreen } from "./components/AuthGate";
 import { SessionModal } from "./components/SessionModal";
 import { OfflineBanner } from "./components/OfflineBanner";
 import { InstallPrompt } from "./components/InstallPrompt";
+import { EnglishOnlyNotice } from "./components/EnglishOnlyNotice";
 
 const THEME_KEY = "voicepc.theme";
 
@@ -71,10 +72,10 @@ export default function App() {
       <div className="app-root theme-container">
         <div className="setup-container">
           <div className="setup-card">
-            <p className="setup-subtitle">{authError ? `ติดต่อเซิร์ฟเวอร์ไม่ได้: ${authError}` : "กำลังตรวจสอบการเข้าสู่ระบบ…"}</p>
+            <p className="setup-subtitle">{authError ? `Cannot reach the server: ${authError}` : "Checking your sign-in…"}</p>
             {authError && (
               <button type="button" className="btn-setup-submit" onClick={refreshAuth}>
-                <span>ลองใหม่</span>
+                <span>Try again</span>
               </button>
             )}
           </div>
@@ -228,7 +229,7 @@ function Remote({ api, email, theme, onToggleTheme, onSessionLost, onLogout, onU
       .stop()
       .then((r) => {
         if (!r.pc2_stopped) {
-          setError("หยุดฝั่ง PC1 แล้ว แต่ติดต่อ PC2 ไม่ได้ — กรุณากดปุ่ม Kill-Switch บนเครื่องด้วย");
+          setError("Stopped on PC1, but PC2 could not be reached — use the kill switch on the PC as well");
         } else {
           setError(null);
         }
@@ -255,13 +256,16 @@ function Remote({ api, email, theme, onToggleTheme, onSessionLost, onLogout, onU
       {/* PWA Install Promotion Banner */}
       <InstallPrompt />
 
+      {/* Voice/text commands are accepted in English only */}
+      <EnglishOnlyNotice />
+
       {/* Responsive Main Layout Container */}
       <main className="app-main-layout">
         {/* Left / Primary Column: Voice Hero + Active Inspector + Command Input */}
         <div className="layout-col-primary">
           {/* Active / Current Job Card */}
           {activeJob && (
-            <section className="active-job-section" aria-label="สถานะคำสั่งปัจจุบัน">
+            <section className="active-job-section" aria-label="Current command">
               <ActiveJobCard
                 job={activeJob}
                 api={api}
@@ -275,7 +279,7 @@ function Remote({ api, email, theme, onToggleTheme, onSessionLost, onLogout, onU
           )}
 
           {/* Voice Assistant Primary Interaction Panel */}
-          <section className="voice-assistant-section" aria-label="สั่งการด้วยเสียง">
+          <section className="voice-assistant-section" aria-label="Voice command">
             <MicrophoneHero
               mic={mic}
               wsUp={wsUp}
@@ -286,7 +290,7 @@ function Remote({ api, email, theme, onToggleTheme, onSessionLost, onLogout, onU
           </section>
 
           {/* Text Command Input & Quick Actions */}
-          <section className="command-input-section" aria-label="พิมพ์คำสั่ง">
+          <section className="command-input-section" aria-label="Type a command">
             <CommandInput
               onSubmitText={(txt) => submit(api.sendText(txt))}
               busy={busy}
@@ -299,7 +303,7 @@ function Remote({ api, email, theme, onToggleTheme, onSessionLost, onLogout, onU
         {/* Right / Secondary Column: Telemetry + Command History */}
         <div className="layout-col-secondary">
           {/* PC System Telemetry & Remote Session */}
-          <section className="telemetry-section" aria-label="สถานะเครื่องคอมพิวเตอร์">
+          <section className="telemetry-section" aria-label="Computer status">
             <PCStatusPanel
               pc2Online={pc2Online}
               pc2Data={pc2Data}

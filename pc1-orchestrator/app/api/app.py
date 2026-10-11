@@ -58,6 +58,7 @@ def create_app(orch: Orchestrator, store: SqliteStore, broadcaster: Broadcaster,
 
     @contextlib.asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+        await orch.recover()  # close jobs a previous run left unfinished (they can never complete)
         task = None
         if heartbeat_interval:
             async def beat() -> None:
@@ -145,6 +146,10 @@ def create_app(orch: Orchestrator, store: SqliteStore, broadcaster: Broadcaster,
             return (await orch.reply(job_id, body.text, dev)).public()
         except ValueError as e:
             raise HTTPException(422, str(e)) from e
+
+    @app.post("/jobs/{job_id}/cancel")
+    async def cancel_job(job_id: str, dev: Device) -> dict[str, Any]:
+        return (await orch.cancel(job_id, dev)).public()
 
     @app.post("/confirm/{job_id}")
     async def confirm(job_id: str, body: ConfirmIn, dev: Device) -> dict[str, Any]:

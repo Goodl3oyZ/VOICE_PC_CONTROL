@@ -26,6 +26,7 @@ from ..ports import (
     ToolPort,
 )
 from .aliases import AliasNormalizer
+from .i18n import YES_WORDS, Messages, is_english
 from .jobs import Job, JobState, new_job_id
 from .knowledge import Knowledge
 from .policy import PolicyContext, RateLimiter, decide
@@ -34,7 +35,6 @@ from .summary import deny_message, summarize
 
 log = logging.getLogger("pc1.orchestrator")
 S = JobState
-YES_WORDS = {"ใช่", "ใช่ครับ", "ใช่ค่ะ", "ถูก", "ถูกต้อง", "โอเค", "ok", "yes", "ตกลง"}
 
 
 class Conflict(Exception):
@@ -49,6 +49,7 @@ class NotFound(Exception):
 class OrchestratorConfig:
     stt_confidence_min: float = 0.7
     confirm_timeout_s: float = 120.0
+    clarify_timeout_s: float = 300.0  # unanswered questions expire instead of blocking the UI forever
     stt_timeout_s: float = 10.0
     llm_timeout_s: float = 30.0
     tool_timeout_s: float = 15.0
@@ -60,6 +61,7 @@ class OrchestratorConfig:
     breaker_threshold: int = 3
     breaker_cooldown_s: float = 30.0
     rate_limit_per_min: int = 20
+    language: str = "th"  # "en" = English-only commands, English replies
 
 
 class Orchestrator:
@@ -70,6 +72,7 @@ class Orchestrator:
         self.kb = knowledge
         self.cfg = config or OrchestratorConfig()
         self.clock = clock
+        self.t = Messages(self.cfg.language)
         self.normalize = AliasNormalizer(knowledge.aliases, [*knowledge.apps, *knowledge.sites])
         self.rate = RateLimiter(self.cfg.rate_limit_per_min, 60.0, clock)
         self._active: dict[str, Job] = {}
@@ -99,6 +102,8 @@ class Orchestrator:
         job = self._get_active(job_id)
         if job.state != S.CLARIFYING:
             raise Conflict("job is not waiting for an answer")
+        if text.strip().lower() not in YES_WORDS and text.strip() and not self._language_ok(text):
+            raise ValueError(self.t("only_english"))
         text = text.strip()[:1000]
         if not text:
             raise ValueError("empty reply")
@@ -120,23 +125,56 @@ class Orchestrator:
             raise Conflict("job is not awaiting confirmation")
         pending = job.pending
         if self.clock() > pending["expires_at"]:
-            await self._cancel(job, "หมดเวลายืนยัน")
+            await self._cancel(job, self.t("confirm_expired"))
             raise Conflict("confirmation expired")
         self._audit("confirm", job, {"device": device, "approve": approve, "args_hash": args_hash})
         if not approve:
-            await self._cancel(job, "ผู้ใช้ไม่อนุมัติ")
+            await self._cancel(job, self.t("not_approved"))
             return job
         if args_hash != pending["args_hash"]:
-            await self._fail(job, "พารามิเตอร์ไม่ตรงกับที่แสดงในการ์ดยืนยัน จึงไม่ทำงาน", "denied")
+            await self._fail(job, self.t("args_mismatch"), "denied")
             return job
         self._spawn(job, self._run_confirmed(job))
         return job
 
+    async def cancel(self, job_id: str, device: str) -> Job:
+        """Cancel one job (e.g. an unanswered question). Works for stale jobs left in the DB too."""
+        job = self._active.get(job_id)
+        if job is None:
+            d = self.store.get_job(job_id)
+            if d is None:
+                raise NotFound(job_id)
+            job = Job.from_dict(d)
+            if job.terminal:
+                raise Conflict("job already finished")
+            self._active[job.id] = job
+        await self._cancel(job, self.t("user_cancelled"))
+        task = self._tasks.pop(job.id, None)
+        if task and task is not asyncio.current_task():
+            task.cancel()
+        self._audit("cancel", job, {"device": device}, best_effort=True)
+        return job
+
+    async def recover(self) -> int:
+        """At startup: jobs left mid-flight by a restart can never finish — close them as cancelled."""
+        n = 0
+        for d in self.store.list_unfinished_jobs():
+            if d["id"] in self._active:
+                continue
+            job = Job.from_dict(d)
+            self._active[job.id] = job
+            await self._cancel(job, self.t("stale_job"))
+            n += 1
+        if n:
+            log.info("recovered %d unfinished job(s) as cancelled", n)
+        return n
+
     async def stop(self, device: str) -> dict[str, Any]:
+        await self.recover()  # stale DB jobs (e.g. after a restart) are cleared by Stop too
         cancelled = []
         for job in list(self._active.values()):
             if not job.terminal:
-                await self._cancel(job, "ผู้ใช้กดหยุด")
+                await self._cancel(job, self.t("user_stopped"))
                 cancelled.append(job.id)
             task = self._tasks.pop(job.id, None)
             if task and task is not asyncio.current_task():
@@ -203,15 +241,15 @@ class Orchestrator:
             await asyncio.wait_for(coro, self.cfg.job_timeout_s)
         except asyncio.CancelledError:
             if not job.terminal:
-                await self._cancel(job, "ยกเลิกแล้ว")
+                await self._cancel(job, self.t("cancelled"))
             raise
         except TimeoutError:
-            await self._fail(job, "หมดเวลาทำงาน (job timeout)")
+            await self._fail(job, self.t("job_timeout"))
         except AuditWriteError:
-            await self._fail(job, "เขียน audit log ไม่ได้ จึงไม่ทำงานต่อ (fail closed)")
+            await self._fail(job, self.t("audit_failed"))
         except Exception as e:  # noqa: BLE001 — never leave a job floating
             log.exception("pipeline error in %s", job.id)
-            await self._fail(job, f"ข้อผิดพลาดภายใน: {type(e).__name__}")
+            await self._fail(job, self.t("internal_error", name=type(e).__name__))
         finally:
             if self._tasks.get(job.id) is asyncio.current_task():
                 self._tasks.pop(job.id, None)
@@ -225,22 +263,33 @@ class Orchestrator:
                                             self.cfg.stt_timeout_s)
             except TimeoutError:
                 self._event(job, "stt", "fail", t0)
-                await self._fail(job, "ถอดเสียงช้าเกินกำหนด")
+                await self._fail(job, self.t("stt_timeout"))
                 return
             self._event(job, "stt", "ok", t0)
             job.text, job.stt_confidence = tr.text.strip(), tr.confidence
             if not job.text:
-                await self._fail(job, "ไม่ได้ยินเสียงพูด ลองใหม่หรือพิมพ์แทน")
+                await self._fail(job, self.t("no_speech"))
+                return
+            if not self._language_ok(job.text):
+                await self._fail(job, self.t("only_english"), "rejected_language")
                 return
             job.normalized = self.normalize(job.text)
-            if tr.confidence < self.cfg.stt_confidence_min:
-                job.question = f'ได้ยินว่า "{job.text}" ใช่ไหม? ตอบ "ใช่" หรือพิมพ์ข้อความที่ถูกต้อง'
+            is_stop = (sc := match_shortcut(job.normalized, self.kb)) is not None and sc.tool == "stop_all"
+            if tr.confidence < self.cfg.stt_confidence_min and not is_stop:  # Stop must never wait
+                job.question = self.t("stt_confirm", text=job.text)
                 job.clarify_kind = "stt_confirm"
-                await self._move(job, S.CLARIFYING)
+                await self._ask(job)
                 return
         else:
+            if not self._language_ok(job.text):
+                await self._fail(job, self.t("only_english"), "rejected_language")
+                return
             job.normalized = self.normalize(job.text)
         await self._plan_loop(job)
+
+    def _language_ok(self, text: str) -> bool:
+        """English-only mode: reject other languages instead of guessing (Whisper is weak in Thai here)."""
+        return self.cfg.language != "en" or is_english(text)
 
     async def _resume_planning(self, job: Job) -> None:
         await self._plan_loop(job)
@@ -252,22 +301,22 @@ class Orchestrator:
             if job.terminal:
                 return
             if plan.kind == "clarify":
-                job.question, job.clarify_kind = plan.message or "ช่วยบอกเพิ่มหน่อยครับ", "llm"
-                await self._move(job, S.CLARIFYING)
+                job.question, job.clarify_kind = plan.message or self.t("clarify_default"), "llm"
+                await self._ask(job)
                 return
             if plan.kind == "final":
                 if job.steps:
                     await self._done(job)
                 else:
-                    await self._fail(job, plan.message or "ไม่มีเครื่องมือที่ทำคำสั่งนี้ได้", "refused")
+                    await self._fail(job, plan.message or self.t("no_tool"), "refused")
                 return
             if plan.kind == "invalid" or plan.call is None:
-                await self._fail(job, "AI ตอบไม่ถูกรูปแบบ จึงไม่ได้ทำอะไร")
+                await self._fail(job, self.t("llm_invalid"))
                 return
             call = plan.call
             if job.steps and job.steps[-1]["tool"] == call.tool \
                     and job.steps[-1]["arguments"] == call.arguments:
-                await self._fail(job, "AI เรียกคำสั่งเดิมซ้ำ จึงหยุดไว้ก่อน (loop guard)")
+                await self._fail(job, self.t("loop_repeat"))
                 return
 
             await self._move(job, S.ROUTING)
@@ -280,7 +329,7 @@ class Orchestrator:
                                        "decision": decision.decision, "reason": decision.reason,
                                        "risk": decision.risk, "args_hash": decision.args_hash})
             if decision.decision == "deny":
-                await self._fail(job, deny_message(decision.reason), "denied")
+                await self._fail(job, deny_message(decision.reason, self.cfg.language), "denied")
                 return
             if decision.decision == "confirm":
                 job.pending = {"tool": call.tool, "arguments": decision.arguments,
@@ -297,7 +346,7 @@ class Orchestrator:
             if job.planner == "shortcut" or not self.cfg.multi_step:
                 await self._done(job)
                 return
-        await self._fail(job, "เกินจำนวนขั้นสูงสุดที่กำหนด (loop guard)")
+        await self._fail(job, self.t("max_steps"))
 
     async def _plan(self, job: Job) -> PlanResult:
         if not job.steps:
@@ -337,10 +386,10 @@ class Orchestrator:
                        approved: bool) -> bool:
         now = self.clock()
         if now < self._breaker_until:
-            await self._fail(job, "PC2 ล้มเหลวต่อเนื่อง พักการเชื่อมต่อชั่วคราว (circuit breaker)")
+            await self._fail(job, self.t("breaker"))
             return False
         if self.cfg.heartbeat_enabled and not self.pc2_online:
-            await self._fail(job, "PC2 ออฟไลน์อยู่ สั่งงานไม่ได้ตอนนี้")
+            await self._fail(job, self.t("pc2_offline"))
             return False
         step = len(job.steps)
         async with self._pc2_lock:  # one job at a time per PC2 (§14.7)
@@ -359,11 +408,11 @@ class Orchestrator:
                 self._failures += 1
                 if self._failures >= self.cfg.breaker_threshold:
                     self._breaker_until = self.clock() + self.cfg.breaker_cooldown_s
-                await self._fail(job, f"ติดต่อ PC2 ไม่ได้ ({e})")
+                await self._fail(job, self.t("pc2_unreachable", reason=e))
                 return False
             except TimeoutError:
                 self._event(job, "tool", "fail", t0, tool=tool)
-                await self._fail(job, "PC2 ตอบช้าเกินกำหนด")
+                await self._fail(job, self.t("pc2_slow"))
                 return False
             self._failures = 0
             self.pc2_last_seen = self.clock()
@@ -377,16 +426,25 @@ class Orchestrator:
             job.tainted = True
         self._audit("tool_result", job, {"tool": tool, "ok": result.ok, "verified": result.verified,
                                          "error": result.error})
-        job.summary = summarize(tool, args, result, self.kb)
+        job.summary = summarize(tool, args, result, self.kb, self.cfg.language)
         if not (result.ok and result.verified):
             await self._fail(job, job.summary)
             return False
         return True
 
+    async def _ask(self, job: Job) -> None:
+        await self._move(job, S.CLARIFYING)
+        asyncio.create_task(self._expire_clarify(job, job.question))
+
+    async def _expire_clarify(self, job: Job, question: str | None) -> None:
+        await asyncio.sleep(self.cfg.clarify_timeout_s)
+        if job.state == S.CLARIFYING and job.question == question:
+            await self._cancel(job, self.t("clarify_expired"))
+
     async def _expire_confirm(self, job: Job, args_hash: str | None) -> None:
         await asyncio.sleep(self.cfg.confirm_timeout_s)
         if job.state == S.AWAITING_CONFIRM and job.pending and job.pending["args_hash"] == args_hash:
-            await self._cancel(job, "หมดเวลายืนยัน")
+            await self._cancel(job, self.t("confirm_expired"))
 
     # ------------------------------------------------------------------ state helpers
     def _get_active(self, job_id: str) -> Job:
