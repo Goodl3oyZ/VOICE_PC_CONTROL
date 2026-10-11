@@ -50,7 +50,7 @@ def build(settings: Settings | None = None) -> FastAPI:
             raise SystemExit("VPC_PC2_SECRET must be set (>= 32 chars) when VPC_PC2=relay")
         from .adapters.agent_hub import AgentHub, PC2RelayTools
         hub = AgentHub(s.pc2_secret.encode())
-        tools = PC2RelayTools(hub, s.pc2_secret.encode(), timeout=s.tool_timeout_s + 5)
+        tools = PC2RelayTools(hub, s.pc2_secret.encode(), timeout=160)  # >= slowest tool (run_tests)
         heartbeat = s.heartbeat_s
     elif s.pc2 == "http":
         if len(s.pc2_secret) < 32:

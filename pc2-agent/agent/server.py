@@ -96,7 +96,7 @@ def create_app(cfg: AgentConfig, secret: bytes, launcher: Launcher,
                 try:
                     result = await asyncio.wait_for(
                         asyncio.to_thread(REGISTRY[name], check.args, ctx),  # type: ignore[arg-type]
-                        cfg.tool_timeout_s)
+                        cfg.tests_timeout_s + 10 if name == "run_tests" else cfg.tool_timeout_s)
                 except TimeoutError:
                     result = ToolResult(ok=False, error="tool timeout")
                 except Exception as e:  # noqa: BLE001 — report, never crash the agent

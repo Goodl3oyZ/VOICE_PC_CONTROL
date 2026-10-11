@@ -13,6 +13,7 @@ class Knowledge:
     sites: dict[str, str] = field(default_factory=dict)  # canonical -> https URL
     allowed_hosts: list[str] = field(default_factory=list)
     aliases: dict[str, str] = field(default_factory=dict)  # spoken form -> canonical
+    projects: dict[str, dict[str, Any]] = field(default_factory=dict)  # Phase 3: name -> {"display": ...}
     limits: list[str] = field(default_factory=list)
     memory: list[str] = field(default_factory=list)  # user-approved preferences
 
@@ -32,6 +33,8 @@ class Knowledge:
         apps = ", ".join(f"{k} ({self.display(k)})" for k in self.apps)
         sites = ", ".join(f"{k}={v}" for k, v in self.sites.items())
         lines = [f"Apps (allowlist): {apps}", f"Sites: {sites}"]
+        if self.projects:
+            lines.append("Code projects: " + ", ".join(self.projects))
         if self.memory:
             lines.append("User preferences: " + "; ".join(self.memory))
         if self.limits:

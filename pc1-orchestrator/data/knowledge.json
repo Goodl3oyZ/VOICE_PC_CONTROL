@@ -16,6 +16,7 @@
     "github": "https://github.com/",
     "facebook": "https://www.facebook.com/"
   },
+  "projects": {"demo": {"display": "Demo project (AI coding sandbox)"}},
   "allowed_hosts": ["youtube.com", "google.com", "github.com", "facebook.com", "wikipedia.org"],
   "aliases": {
     "กูเกิลโครม": "chrome", "กูเกิ้ลโครม": "chrome", "โครม": "chrome", "google chrome": "chrome",

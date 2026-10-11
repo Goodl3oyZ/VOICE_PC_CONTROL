@@ -45,8 +45,8 @@ async def _serve(ws: Any, local: httpx.AsyncClient) -> None:
             t.add_done_callback(tasks.discard)
 
 
-async def run_connector(app: Any, url: str, secret: bytes, max_backoff: float = 30.0) -> None:
-    """Keep a connection to PC1 open forever, reconnecting with exponential backoff."""
+async def run_connector(app: Any, url: str, secret: bytes, max_backoff: float = 5.0) -> None:
+    """Keep a connection to PC1 open forever, reconnecting with a short capped backoff."""
     transport = httpx.ASGITransport(app=app, client=("127.0.0.1", 0))
     backoff = 1.0
     async with httpx.AsyncClient(transport=transport, base_url="http://agent", timeout=60) as local:

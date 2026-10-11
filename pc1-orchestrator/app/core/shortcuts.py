@@ -102,6 +102,31 @@ def _media_or_search(text: str) -> ToolCall | None:
     return None
 
 
+_PROJECT_CMDS = [
+    (re.compile(r"^open\s+(the\s+)?project\s+(?P<p>[\w\-]+)$|^open\s+(the\s+)?(?P<p2>[\w\-]+)\s+project$", re.I),
+     "open_project"),
+    (re.compile(r"^(list|show)\s+(the\s+)?files\s+(in|of)\s+(the\s+)?(?P<p>[\w\-]+)(\s+project)?$", re.I),
+     "list_files"),
+    (re.compile(r"^(run\s+(the\s+)?tests\s+(in|for|of)\s+(the\s+)?(?P<p>[\w\-]+)(\s+project)?|"
+                r"run\s+(the\s+)?(?P<p2>[\w\-]+)\s+tests|test\s+(?P<p3>[\w\-]+))$", re.I), "run_tests"),
+    (re.compile(r"^(show\s+(me\s+)?(the\s+)?(diff|changes)\s+(for|in|of)\s+(the\s+)?(?P<p>[\w\-]+)(\s+project)?|"
+                r"what\s+changed\s+in\s+(the\s+)?(?P<p2>[\w\-]+)(\s+project)?)$", re.I), "git_diff"),
+    (re.compile(r"^(revert|undo|discard)\s+(all\s+)?(the\s+)?(ai\s+)?(changes|edits)\s+(in|for|of)\s+(the\s+)?"
+                r"(?P<p>[\w\-]+)(\s+project)?$", re.I), "revert_changes"),
+    (re.compile(r"^(git\s+status|status)\s+(of|for)\s+(the\s+)?(?P<p>[\w\-]+)(\s+project)?$", re.I), "git_status"),
+]
+
+
+def _project_cmd(text: str, kb: Knowledge) -> ToolCall | None:
+    for rx, tool in _PROJECT_CMDS:
+        m = rx.match(text)
+        if m:
+            name = next((m[g] for g in ("p", "p2", "p3") if g in rx.groupindex and m[g]), "").lower()
+            if name in kb.projects:  # unknown names go to the planner (it can ask which project)
+                return ToolCall(tool=tool, arguments={"project": name}, rationale="shortcut: project")
+    return None
+
+
 def match_shortcut(normalized: str, kb: Knowledge) -> ToolCall | None:
     text = " ".join(normalized.strip().strip(".!?,").split())
     text = _EN_TAIL.sub("", _EN_LEAD.sub("", text)).strip(" .!?,")
@@ -109,6 +134,9 @@ def match_shortcut(normalized: str, kb: Knowledge) -> ToolCall | None:
         return ToolCall(tool="stop_all", rationale="shortcut: stop")
     if STATUS_RE.match(text):
         return ToolCall(tool="get_status", rationale="shortcut: status")
+    project = _project_cmd(text, kb)
+    if project is not None:
+        return project
     media = _media_or_search(text)
     if media is not None:
         return media

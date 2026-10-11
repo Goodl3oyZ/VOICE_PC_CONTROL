@@ -76,6 +76,8 @@ class AgentPolicy:
             return Check(False, "app not in allowlist")
         if tool == "open_url" and not host_allowed(data["url"], self.cfg.allowed_hosts):
             return Check(False, "host not in allowlist")
+        if "project" in data and data["project"] not in self.cfg.projects:
+            return Check(False, "project not registered")
         if tool not in ALWAYS_ALLOWED:
             if self.kill.on:
                 return Check(False, "kill switch on")

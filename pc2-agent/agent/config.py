@@ -16,8 +16,18 @@ class AppEntry:
 
 
 @dataclass
+class ProjectEntry:
+    path: str
+    test_cmd: list[str] = field(default_factory=list)  # argv, no shell; e.g. ["npm", "test"]
+    ide: str = "cursor"  # app name from `apps` used by open_project
+    base_branch: str = "main"
+
+
+@dataclass
 class AgentConfig:
     apps: dict[str, AppEntry] = field(default_factory=dict)
+    projects: dict[str, ProjectEntry] = field(default_factory=dict)  # Phase 3 coding
+    tests_timeout_s: float = 120.0
     browser_argv: list[str] = field(default_factory=list)  # URL is appended as one argv element
     browser_process: str = "chrome.exe"
     allowed_hosts: list[str] = field(default_factory=list)
@@ -43,6 +53,12 @@ class AgentConfig:
         for name, e in d.pop("apps", {}).items():
             argv = [os.path.expandvars(a) for a in e["argv"]] if e.get("argv") else None
             apps[name] = AppEntry(process=e["process"], argv=argv, uri=e.get("uri"))
+        projects = {}
+        for name, e in d.pop("projects", {}).items():
+            projects[name] = ProjectEntry(path=os.path.expandvars(e["path"]),
+                                          test_cmd=[os.path.expandvars(a) for a in e.get("test_cmd", [])],
+                                          ide=e.get("ide", "cursor"), base_branch=e.get("base_branch", "main"))
+        d["projects"] = projects
         d["browser_argv"] = [os.path.expandvars(a) for a in d.get("browser_argv", [])]
         if "data_dir" in d:
             d["data_dir"] = os.path.expandvars(d["data_dir"])

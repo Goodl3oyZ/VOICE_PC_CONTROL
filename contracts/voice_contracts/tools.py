@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 from dataclasses import dataclass
 from typing import Any, Literal
 from urllib.parse import quote_plus, urlsplit
@@ -108,6 +109,47 @@ class BrowserTabsArgs(_Args):
         description="list open tabs, switch to next/previous tab, or close the current tab")
 
 
+# ---- Phase 3: AI coding agent (projects registered on PC2; edits only on an ai/* git branch) ----
+_REL_PATH_CHARS = re.compile(r"^[\w .\-\\/]{0,300}$")
+
+
+def safe_rel_path(v: str) -> str:
+    """Relative path inside a project: no drive, no leading slash, no "..", no odd characters.
+    PC2 additionally resolves the real path and checks it stays inside the project (symlinks, TC-S04)."""
+    if not _REL_PATH_CHARS.match(v) or v.startswith(("/", "\\")) or re.match(r"^[A-Za-z]:", v):
+        raise ValueError("path must be relative to the project")
+    if any(part == ".." for part in re.split(r"[\\/]", v)):
+        raise ValueError("'..' is not allowed")
+    return v
+
+
+class ProjectArgs(_Args):
+    project: str = Field(pattern=NAME_PATTERN, description="Registered project name")
+
+
+class ListFilesArgs(ProjectArgs):
+    subdir: str = Field("", max_length=300, description="Folder inside the project ('' = root)")
+    _v = field_validator("subdir")(classmethod(lambda cls, v: safe_rel_path(v)))
+
+
+class ReadFileArgs(ProjectArgs):
+    path: str = Field(min_length=1, max_length=300, description="File path inside the project")
+    _v = field_validator("path")(classmethod(lambda cls, v: safe_rel_path(v)))
+
+
+class SearchCodeArgs(ProjectArgs):
+    query: str = Field(min_length=2, max_length=100, description="Text to find in the project files")
+
+
+class EditFileArgs(ProjectArgs):
+    # Code must be kept byte-exact: never strip whitespace (indentation, trailing newlines).
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=False)
+    path: str = Field(min_length=1, max_length=300)
+    _v = field_validator("path")(classmethod(lambda cls, v: safe_rel_path(v)))
+    old_text: str = Field("", max_length=4000, description="Exact text to replace ('' = create a new file)")
+    new_text: str = Field(max_length=8000, description="Replacement text")
+
+
 @dataclass(frozen=True)
 class ToolSpec:
     name: str
@@ -144,6 +186,19 @@ TOOLS: dict[str, ToolSpec] = {
                  "Find a video or song on YouTube and start playing the first result in the agent browser", 2),
         ToolSpec("browser_tabs", 1, BrowserTabsArgs,
                  "List, switch (next/previous) or close tabs in the agent browser", 2),
+        # Phase 3 — coding. Reads are risk 0; edits/tests change files -> risk 2 (git branch + checkpoint).
+        ToolSpec("open_project", 1, ProjectArgs, "Open a registered project in the IDE (Cursor) on PC2", 3),
+        ToolSpec("list_files", 0, ListFilesArgs, "List files and folders of a registered project", 3),
+        ToolSpec("read_file", 0, ReadFileArgs, "Read a text file of a registered project", 3),
+        ToolSpec("search_code", 0, SearchCodeArgs, "Find text in a project's files (file, line, text)", 3),
+        ToolSpec("git_status", 0, ProjectArgs, "Show the project's git branch and changed files", 3),
+        ToolSpec("edit_file", 2, EditFileArgs,
+                 "Replace exact text in a project file (or create a file). Always happens on an ai/* git "
+                 "branch, never on main", 3),
+        ToolSpec("run_tests", 2, ProjectArgs, "Run the project's configured test command and report the result", 3),
+        ToolSpec("git_diff", 0, ProjectArgs, "Show what the AI changed compared with the base branch", 3),
+        ToolSpec("revert_changes", 2, ProjectArgs,
+                 "Undo all AI changes: back to the base branch, delete the ai/* branch", 3),
     ]
 }
 
@@ -164,7 +219,7 @@ def args_hash(tool: str, arguments: dict[str, Any]) -> str:
     return "sha256:" + hashlib.sha256(canonical.encode("utf-8")).hexdigest()
 
 
-def llm_tool_schemas(app_enum: list[str]) -> list[dict[str, Any]]:
+def llm_tool_schemas(app_enum: list[str], project_enum: list[str] | None = None) -> list[dict[str, Any]]:
     """OpenAI/Ollama-style function definitions with the app allowlist as an enum (§7.1)."""
     out = []
     for spec in TOOLS.values():
@@ -175,6 +230,11 @@ def llm_tool_schemas(app_enum: list[str]) -> list[dict[str, Any]]:
         if spec.name == "open_app":
             params["properties"]["app"]["enum"] = app_enum
             params["properties"]["app"].pop("pattern", None)
+        if "project" in params.get("properties", {}):
+            if not project_enum:
+                continue  # no projects registered: don't offer coding tools at all
+            params["properties"]["project"]["enum"] = project_enum
+            params["properties"]["project"].pop("pattern", None)
         out.append({"type": "function",
                     "function": {"name": spec.name, "description": spec.description,
                                  "parameters": params}})

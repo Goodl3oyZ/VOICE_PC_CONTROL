@@ -12,6 +12,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
 
+from voice_contracts.models import ToolResult
 from voice_contracts.tools import TOOLS, llm_tool_schemas
 
 from ..ports import (
@@ -32,7 +33,7 @@ from .jobs import Job, JobState, new_job_id
 from .knowledge import Knowledge
 from .policy import PolicyContext, RateLimiter, decide
 from .shortcuts import match_shortcut
-from .summary import deny_message, summarize
+from .summary import coding_report, deny_message, summarize
 
 log = logging.getLogger("pc1.orchestrator")
 S = JobState
@@ -54,6 +55,9 @@ class OrchestratorConfig:
     stt_timeout_s: float = 10.0
     llm_timeout_s: float = 30.0
     tool_timeout_s: float = 15.0
+    slow_tool_timeout_s: float = 150.0  # run_tests can take minutes
+    coding_max_steps: int = 15
+    coding_job_timeout_s: float = 900.0
     job_timeout_s: float = 120.0
     max_steps: int = 8
     multi_step: bool = False  # Phase 1: one tool per command; ReAct loop comes in Phase 3
@@ -78,6 +82,7 @@ class Orchestrator:
         self.rate = RateLimiter(self.cfg.rate_limit_per_min, 60.0, clock)
         self._active: dict[str, Job] = {}
         self._tasks: dict[str, asyncio.Task[Any]] = {}
+        self._deadlines: dict[str, asyncio.Timeout] = {}
         self._pc2_lock = asyncio.Lock()
         self.pc2_last_seen: float | None = None
         self.pc2_status: dict[str, Any] = {}
@@ -170,10 +175,13 @@ class Orchestrator:
             log.info("recovered %d unfinished job(s) as cancelled", n)
         return n
 
-    async def stop(self, device: str) -> dict[str, Any]:
+    async def stop(self, device: str, keep: str | None = None) -> dict[str, Any]:
+        """Cancel every job (except `keep`, the job that asked to stop) and stop PC2 immediately."""
         await self.recover()  # stale DB jobs (e.g. after a restart) are cleared by Stop too
         cancelled = []
         for job in list(self._active.values()):
+            if job.id == keep:
+                continue
             if not job.terminal:
                 await self._cancel(job, self.t("user_stopped"))
                 cancelled.append(job.id)
@@ -239,7 +247,9 @@ class Orchestrator:
 
     async def _guard(self, job: Job, coro: Any) -> None:
         try:
-            await asyncio.wait_for(coro, self.cfg.job_timeout_s)
+            async with asyncio.timeout(self.cfg.job_timeout_s) as deadline:
+                self._deadlines[job.id] = deadline
+                await coro
         except asyncio.CancelledError:
             if not job.terminal:
                 await self._cancel(job, self.t("cancelled"))
@@ -252,6 +262,7 @@ class Orchestrator:
             log.exception("pipeline error in %s", job.id)
             await self._fail(job, self.t("internal_error", name=type(e).__name__))
         finally:
+            self._deadlines.pop(job.id, None)
             if self._tasks.get(job.id) is asyncio.current_task():
                 self._tasks.pop(job.id, None)
 
@@ -301,7 +312,7 @@ class Orchestrator:
         await self._plan_loop(job)
 
     async def _plan_loop(self, job: Job) -> None:
-        while len(job.steps) < self.cfg.max_steps:
+        while len(job.steps) < (self.cfg.coding_max_steps if _is_coding(job) else self.cfg.max_steps):
             await self._move(job, S.PLANNING)
             plan = await self._plan(job)
             if job.terminal:
@@ -312,6 +323,8 @@ class Orchestrator:
                 return
             if plan.kind == "final":
                 if job.steps:
+                    if _is_coding(job):
+                        job.summary = coding_report(job, plan.message, self.cfg.language)
                     await self._done(job)
                 else:
                     await self._fail(job, plan.message or self.t("no_tool"), "refused")
@@ -345,13 +358,22 @@ class Orchestrator:
                 await self._move(job, S.AWAITING_CONFIRM)
                 asyncio.create_task(self._expire_confirm(job, decision.args_hash))
                 return
+            if call.tool == "stop_all":  # never queue behind the job it has to stop (US-903)
+                await self._stop_now(job)
+                return
             ok = await self._execute(job, call.tool, decision.arguments, decision.args_hash or "",
                                      approved=False)
             if not ok:
                 return
-            if job.planner == "shortcut" or not self.cfg.multi_step:
+            if job.planner == "shortcut" or not (self.cfg.multi_step or _is_coding(job)):
                 await self._done(job)
                 return
+            if _is_coding(job) and job.id in self._deadlines:  # coding: think -> act -> observe loop
+                d = self._deadlines[job.id]
+                d.reschedule(max(d.when() or 0, asyncio.get_running_loop().time()
+                                 + self.cfg.coding_job_timeout_s - (self.clock() - job.created_at)))
+        if _is_coding(job):
+            job.summary = coding_report(job, "", self.cfg.language)
         await self._fail(job, self.t("max_steps"))
 
     async def _plan(self, job: Job) -> PlanResult:
@@ -363,7 +385,9 @@ class Orchestrator:
         job.planner = "llm"
         ctx = PlanContext(
             knowledge_summary=self.kb.prompt_summary(),
-            tools=llm_tool_schemas(list(self.kb.apps)),
+            # open_project is shortcut-only: small models pick it instead of doing a coding task.
+            tools=[t for t in llm_tool_schemas(list(self.kb.apps), list(self.kb.projects))
+                   if t["function"]["name"] not in SHORTCUT_ONLY_TOOLS],
             history=job.history,
             observations=[{"tool": s["tool"], "arguments": s["arguments"], "result": s["result"],
                            "trusted": not s["result"].get("untrusted", False)} for s in job.steps],
@@ -381,6 +405,18 @@ class Orchestrator:
             log.info("invalid plan for %s (attempt %d): %s", job.id, attempt + 1, plan.message)
         self._event(job, "plan", "fail", t0)
         return plan
+
+    async def _stop_now(self, job: Job) -> None:
+        t0 = self.clock()
+        res = await self.stop(job.device, keep=job.id)
+        await self._move(job, S.DISPATCHING)
+        await self._move(job, S.RUNNING)
+        await self._move(job, S.VERIFYING)
+        result = ToolResult(ok=True, verified=True, data={"stopped": True, **res})
+        job.steps.append({"tool": "stop_all", "arguments": {}, "result": result.model_dump()})
+        self._event(job, "tool", "ok", t0, tool="stop_all", risk=0)
+        job.summary = summarize("stop_all", {}, result, self.kb, self.cfg.language)
+        await self._done(job)
 
     async def _run_confirmed(self, job: Job) -> None:
         p = job.pending or {}
@@ -408,7 +444,7 @@ class Orchestrator:
                 result = await asyncio.wait_for(
                     self.tools.call(tool, args, f"{job.id}:s{step}",
                                     approved_hash=args_hash if approved else None),
-                    self.cfg.tool_timeout_s)
+                    self.cfg.slow_tool_timeout_s if tool == "run_tests" else self.cfg.tool_timeout_s)
             except PC2Unavailable as e:
                 self._event(job, "tool", "fail", t0, tool=tool)
                 self._failures += 1
@@ -520,3 +556,14 @@ class Orchestrator:
             self.store.add_event(job.id, stage, status, ms, **extra)
         except Exception as e:  # noqa: BLE001 — metrics must never break the pipeline
             log.warning("event write failed: %s", e)
+
+
+SHORTCUT_ONLY_TOOLS = frozenset({"open_project"})
+# open_project is a one-shot action (like open_app), not a step of a coding task.
+CODING_TOOLS = frozenset({"list_files", "read_file", "search_code", "git_status", "edit_file",
+                          "run_tests", "git_diff", "revert_changes"})
+
+
+def _is_coding(job: Job) -> bool:
+    """A job becomes a multi-step coding job once the planner (not a shortcut) used a coding tool."""
+    return job.planner == "llm" and any(s["tool"] in CODING_TOOLS for s in job.steps)

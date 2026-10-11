@@ -176,3 +176,24 @@ def test_decode_audio_webm_opus():
 
 
 ScriptedLLM  # noqa: B018 (imported for parity with other test modules)
+
+
+async def test_spoken_stop_does_not_wait_for_the_running_job(rig):
+    """US-903: "stop" must act while another job holds PC2, not queue behind it."""
+    import time
+    rig.pc2.delay = 5  # a long-running tool
+    long_job = await rig.orch.submit_text("open notepad", "phone")
+    for _ in range(100):
+        await asyncio.sleep(0.01)
+        if rig.orch.get_job(long_job.id).state == S.RUNNING:
+            break
+    t0 = time.monotonic()
+    stop_job = await rig.orch.submit_text("stop", "phone")
+    for _ in range(200):
+        await asyncio.sleep(0.01)
+        if rig.orch.get_job(stop_job.id).terminal:
+            break
+    assert time.monotonic() - t0 < 1.0  # not 5 s
+    assert rig.orch.get_job(stop_job.id).state == S.DONE
+    assert rig.orch.get_job(long_job.id).state == S.CANCELLED and rig.pc2.stopped >= 1
+    await rig.orch.wait_idle()

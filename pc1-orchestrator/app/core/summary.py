@@ -44,6 +44,15 @@ TEXT = {
         "opened_result": "เปิดผลลัพธ์ที่ {index}: {title}", "playing": "กำลังเล่น “{title}” บน YouTube",
         "tabs": "เปิดอยู่ {n} แท็บ: {titles}", "tab_switched": "สลับแท็บแล้ว: {title}",
         "tab_closed": "ปิดแท็บแล้ว (เหลือ {n})", "captcha": "เจอ CAPTCHA จึงหยุดไว้ กรุณาทำเองบน PC2",
+        "opened_project": "เปิดโปรเจกต์ {project} ใน {ide} แล้ว", "files": "{project} มี {n} รายการ: {items}",
+        "read": "อ่าน {path} แล้ว ({lines} บรรทัด)", "matches": "พบ {n} จุดที่ตรงกับ “{query}”: {items}",
+        "no_matches": "ไม่พบ “{query}”", "git_status": "{project} อยู่บน {branch}; แก้ไข {n} ไฟล์",
+        "edited": "แก้ {path} บนกิ่ง {branch} แล้ว ({stat})", "created": "สร้าง {path} บนกิ่ง {branch} แล้ว",
+        "tests_passed": "เทสต์ผ่านใน {project} ({secs} วินาที)",
+        "tests_failed": "เทสต์ไม่ผ่านใน {project} (exit {code}): {last}",
+        "diff": "แก้ {n} ไฟล์บน {branch} เทียบกับ {base}: {files} ({stat})",
+        "no_diff": "ไม่มีการแก้ไขจาก AI ใน {project}", "reverted": "ย้อนกลับแล้ว: กลับไป {base} ลบกิ่ง {branch}",
+        "nothing_to_revert": "ไม่มีอะไรให้ย้อนใน {project}",
     },
     "en": {
         "failed": "Failed: {error}", "unknown": "unknown reason",
@@ -61,6 +70,15 @@ TEXT = {
         "tabs": "{n} tab(s) open: {titles}", "tab_switched": "Switched to: {title}",
         "tab_closed": "Closed the tab ({n} left)",
         "captcha": "CAPTCHA detected, stopped. Please solve it yourself on PC2",
+        "opened_project": "Opened project {project} in {ide}", "files": "{n} item(s) in {project}: {items}",
+        "read": "Read {path} ({lines} lines)", "matches": "{n} match(es) for “{query}”: {items}",
+        "no_matches": "No matches for “{query}”", "git_status": "{project} is on {branch}; {n} changed file(s)",
+        "edited": "Edited {path} on branch {branch} ({stat})", "created": "Created {path} on branch {branch}",
+        "tests_passed": "Tests PASSED in {project} ({secs}s)",
+        "tests_failed": "Tests FAILED in {project} (exit {code}): {last}",
+        "diff": "{n} file(s) changed on {branch} vs {base}: {files} ({stat})",
+        "no_diff": "No AI changes in {project}", "reverted": "Reverted: back on {base}, branch {branch} deleted",
+        "nothing_to_revert": "Nothing to revert in {project}",
     },
 }
 
@@ -118,4 +136,63 @@ def summarize(tool: str, args: dict[str, Any], result: ToolResult, kb: Knowledge
             return t["tab_switched"].format(title=(tabs[-1]["title"] if tabs else ""))
         titles = " · ".join((tb.get("title") or tb.get("host") or "New tab")[:40] for tb in tabs[:6])
         return t["tabs"].format(n=len(tabs), titles=titles)
+    d = result.data
+    if tool == "open_project":
+        return t["opened_project"].format(project=args["project"], ide=d.get("ide", "the IDE"))
+    if tool == "list_files":
+        files = d.get("files") or []
+        return t["files"].format(n=len(files), project=args["project"], items=", ".join(files[:8]))
+    if tool == "read_file":
+        return t["read"].format(path=args["path"], lines=d.get("lines", "?"))
+    if tool == "search_code":
+        m = d.get("matches") or []
+        if not m:
+            return t["no_matches"].format(query=args["query"])
+        return t["matches"].format(n=len(m), query=args["query"],
+                                   items=" · ".join(f"{x['file']}:{x['line']}" for x in m[:5]))
+    if tool == "git_status":
+        return t["git_status"].format(project=args["project"], branch=d.get("branch"),
+                                      n=len(d.get("changed") or []))
+    if tool == "edit_file":
+        key = "created" if d.get("created") else "edited"
+        return t[key].format(path=args["path"], branch=d.get("branch"), stat=d.get("stat", ""))
+    if tool == "run_tests":
+        if d.get("passed"):
+            return t["tests_passed"].format(project=args["project"], secs=d.get("duration_s"))
+        tail = [ln for ln in (d.get("output_tail") or "").splitlines() if ln.strip()]
+        return t["tests_failed"].format(project=args["project"], code=d.get("exit_code"),
+                                        last=(tail[-1] if tail else "")[:160])
+    if tool == "git_diff":
+        if not d.get("files"):
+            return t["no_diff"].format(project=args["project"])
+        return t["diff"].format(n=len(d["files"]), branch=d.get("branch"), base=d.get("base"),
+                                files=", ".join(d["files"][:6]), stat=d.get("stat", ""))
+    if tool == "revert_changes":
+        if not d.get("reverted"):
+            return t["nothing_to_revert"].format(project=args["project"])
+        return t["reverted"].format(base=d.get("base"), branch=d.get("branch_deleted"))
     return t["done"]
+
+
+def coding_report(job: Any, llm_message: str, language: str = "en") -> str:
+    """Final report of a multi-step coding job, built from the verified step results — the test verdict comes
+    from run_tests, never from the model's own claim (LLM09 misinformation)."""
+    steps = job.steps
+    project = next((s["arguments"].get("project") for s in steps if s["arguments"].get("project")), "the project")
+    edits = [s for s in steps if s["tool"] == "edit_file" and s["result"].get("ok") and s["result"].get("verified")]
+    branch = next((s["result"]["data"].get("branch") for s in reversed(edits)), None)
+    tests = [s for s in steps if s["tool"] == "run_tests" and s["result"].get("ok")]
+    passed = bool(tests) and bool(tests[-1]["result"]["data"].get("passed"))
+    files = sorted({s["arguments"].get("path") for s in edits})
+    if language == "th":
+        verdict = "เทสต์ผ่าน" if passed else ("เทสต์ไม่ผ่าน" if tests else "ยังไม่ได้รันเทสต์")
+        where = f"แก้ {len(edits)} ครั้งบนกิ่ง {branch} ({', '.join(files)})" if edits else "ไม่ได้แก้ไฟล์"
+        return (f"{llm_message.strip() or 'จบงานโค้ด'} — {where}; {verdict}. "
+                f"พูด “show the diff for {project}” หรือ “revert the changes in {project}”")
+    verdict = "tests PASSED" if passed else ("tests FAILED" if tests else "tests not run")
+    where = f"{len(edits)} edit(s) on branch {branch} ({', '.join(files)})" if edits else "no files changed"
+    head = llm_message.strip().rstrip(".") or "Coding task finished"
+    if tests and not passed:
+        head = "Not finished — " + head
+    return (f"{head}. {where}; {verdict}. "
+            f"Say “show the diff for {project}” or “revert the changes in {project}”.")

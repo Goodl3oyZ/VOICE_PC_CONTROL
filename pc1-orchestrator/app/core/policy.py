@@ -63,6 +63,8 @@ def decide(call: ToolCall, ctx: PolicyContext) -> Decision:
         return _deny("app not in allowlist", spec.risk)
     if call.tool == "open_url" and not host_allowed(args["url"], ctx.knowledge.allowed_hosts):
         return _deny("host not in allowlist", spec.risk)
+    if "project" in args and args["project"] not in ctx.knowledge.projects:
+        return _deny("project not registered", spec.risk)
 
     if call.tool not in ALWAYS_ALLOWED:
         if ctx.kill_switch:

@@ -10,6 +10,7 @@
     "cursor": {"process": "Cursor.exe", "argv": ["%LOCALAPPDATA%\\Programs\\cursor\\Cursor.exe"]},
     "vscode": {"process": "Code.exe", "argv": ["%LOCALAPPDATA%\\Programs\\Microsoft VS Code\\Code.exe"]}
   },
+  "projects": {"demo": {"path": "%USERPROFILE%\\voicepc-demo-project", "test_cmd": ["python", "-m", "pytest", "-q"], "ide": "cursor", "base_branch": "main"}},
   "browser_argv": ["%ProgramFiles%\\Google\\Chrome\\Application\\chrome.exe"],
   "browser_process": "chrome.exe",
   "allowed_hosts": ["youtube.com", "google.com", "github.com", "facebook.com", "wikipedia.org"],
