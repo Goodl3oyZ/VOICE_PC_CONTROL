@@ -116,6 +116,6 @@ def summarize(tool: str, args: dict[str, Any], result: ToolResult, kb: Knowledge
             return t["tab_closed"].format(n=len(tabs))
         if args.get("action") in ("next", "previous"):
             return t["tab_switched"].format(title=(tabs[-1]["title"] if tabs else ""))
-        titles = " · ".join((tb.get("title") or tb.get("host") or "?")[:40] for tb in tabs[:6])
+        titles = " · ".join((tb.get("title") or tb.get("host") or "New tab")[:40] for tb in tabs[:6])
         return t["tabs"].format(n=len(tabs), titles=titles)
     return t["done"]

@@ -122,6 +122,7 @@ the hardware decisions in chapter 13 (see "Open questions" below).
 - [x] Web results marked **untrusted** → job tainted → later risk ≥ 2 actions need confirmation (mechanism, US-604)
 - [x] Live E2E through PC1 relay: search → open result → tabs → play → pause → close tab
 - [x] **Tab reuse:** searching never opens a new tab when a search tab is already open (`choose_tab()`, 9 unit cases + 5 agent tests + live real-Chrome test: 3 searches = 1 tab; + YouTube = 2 tabs). Search never overwrites a page the user opened. Old `search_web` (new tab in the user's Chrome per search) disabled
+- [x] **Bugs fixed (seen live):** (1) agent Chrome ran with `--no-sandbox` (Playwright default) → `chromium_sandbox=True`, verified 0 processes with the flag; (2) a YouTube search reused the playing tab and stopped the music → separate player/results tabs (`choose_youtube_tab()`), live test: music keeps playing through searches, one player only; (3) `TargetClosedError` after the agent window was closed → relaunch + retry once
 - [x] Google blocks automated browsers with a CAPTCHA (even headed) → web search reads **Bing**; "search X on google" runs there too and says "(Bing)"
 - [x] **"What can I say?" guide**: `GET /capabilities` (apps/sites from knowledge) → PWA "All commands…" with 38 tap-to-run examples, allowed lists, refused list; voice "help"/"what can I say". Test parses every example and checks the policy allows it
 - [ ] US-302 read & summarise a page with the LLM (untrusted content handling)

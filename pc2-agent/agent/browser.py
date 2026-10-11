@@ -74,8 +74,21 @@ class PlaywrightBrowser:
             self._thread = threading.Thread(target=self._loop, name="agent-browser", daemon=True)
             self._thread.start()
         fut: concurrent.futures.Future[Any] = concurrent.futures.Future()
-        self._jobs.put((fn, fut))
+        self._jobs.put((self._retry_if_closed(fn), fut))
         return fut.result(timeout)
+
+    def _retry_if_closed(self, fn: Callable[[], Any]) -> Callable[[], Any]:
+        """If the user closed the agent window (or Chrome crashed), relaunch and retry once."""
+        def run() -> Any:
+            try:
+                return fn()
+            except Exception as e:  # noqa: BLE001
+                if not _is_closed_error(e):
+                    raise
+                log.info("agent browser was closed (%s); relaunching", type(e).__name__)
+                self._ctx = None
+                return fn()
+        return run
 
     def _loop(self) -> None:
         while True:
@@ -99,6 +112,9 @@ class PlaywrightBrowser:
         self.profile_dir.mkdir(parents=True, exist_ok=True)
         self._ctx = self._pw.chromium.launch_persistent_context(
             str(self.profile_dir), channel=self.channel, headless=self.headless,
+            # Playwright defaults to chromium_sandbox=False, which launches Chrome with --no-sandbox
+            # ("unsupported command-line flag … stability and security will suffer"). Keep the sandbox on.
+            chromium_sandbox=True,
             args=["--no-first-run", "--no-default-browser-check"], viewport=None)
         self._ctx.set_default_navigation_timeout(self.nav_timeout_ms)
         self._ctx.on("close", lambda *_: setattr(self, "_ctx", None))
@@ -109,6 +125,16 @@ class PlaywrightBrowser:
         ctx = self._context()
         pages = [p for p in ctx.pages if not p.is_closed()]
         i = choose_tab([p.url for p in pages], host)
+        page = pages[i] if i is not None else ctx.new_page()
+        page.bring_to_front()
+        return page
+
+    def _youtube_tab(self, purpose: str) -> Any:
+        """search: never take over the tab that is playing; play: replace the song in the player tab."""
+        ctx = self._context()
+        pages = [p for p in ctx.pages if not p.is_closed()]
+        playing = [_host(p.url).endswith(YT_HOST) and _video_playing(p) for p in pages]
+        i = choose_youtube_tab([p.url for p in pages], playing, purpose)
         page = pages[i] if i is not None else ctx.new_page()
         page.bring_to_front()
         return page
@@ -128,7 +154,7 @@ class PlaywrightBrowser:
     def search(self, query: str, max_results: int = 5, site: str = "web") -> list[dict[str, str]]:
         def go() -> list[dict[str, str]]:
             if site == "youtube":
-                page = self._tab_for(YT_HOST)
+                page = self._youtube_tab("search")
                 page.goto(YT_SEARCH_URL + quote_plus(query), wait_until="domcontentloaded")
                 self._check_captcha(page)
                 page.wait_for_selector(YT_FIRST_VIDEO, timeout=15000)
@@ -174,7 +200,7 @@ class PlaywrightBrowser:
 
         def go() -> dict[str, str]:
             # YouTube result: play it in the YouTube tab. Web result: new tab, so the results tab stays.
-            page = self._tab_for(YT_HOST) if site == "youtube" else self._context().new_page()
+            page = self._youtube_tab("play") if site == "youtube" else self._context().new_page()
             page.goto(item["url"], wait_until="domcontentloaded")
             self._check_captcha(page)
             page.bring_to_front()
@@ -183,7 +209,7 @@ class PlaywrightBrowser:
 
     def youtube_play(self, query: str) -> dict[str, Any]:
         def go() -> dict[str, Any]:
-            page = self._tab_for(YT_HOST)
+            page = self._youtube_tab("play")
             page.goto(YT_SEARCH_URL + quote_plus(query), wait_until="domcontentloaded")
             self._check_captcha(page)
             page.wait_for_selector(YT_FIRST_VIDEO, timeout=15000)
@@ -225,6 +251,42 @@ class PlaywrightBrowser:
             self._run(lambda: self._ctx.close())
 
 
+def _is_closed_error(e: BaseException) -> bool:
+    return type(e).__name__ == "TargetClosedError" or "has been closed" in str(e)
+
+
+def _video_playing(page: Any) -> bool:
+    try:
+        return bool(page.evaluate("() => { const v = document.querySelector('video');"
+                                  " return !!v && !v.paused && !v.ended; }"))
+    except Exception:  # noqa: BLE001 — a page that can't answer is treated as not playing
+        return False
+
+
+def _is_watch(url: str) -> bool:
+    return _host(url).endswith(YT_HOST) and "/watch" in urlsplit(url).path
+
+
+def choose_youtube_tab(urls: list[str], playing: list[bool], purpose: str) -> int | None:
+    """YouTube tab rule. purpose="search": reuse a YouTube tab that is NOT playing (results tab), so a
+    search never stops the music; purpose="play": reuse the player (watch) tab so the new song replaces
+    the old one instead of two videos playing at once. None = open a new tab."""
+    yt = [i for i in range(len(urls)) if (_host(urls[i]) == YT_HOST or _host(urls[i]).endswith("." + YT_HOST))]
+    if purpose == "play":
+        for i in reversed(yt):
+            if playing[i] or _is_watch(urls[i]):
+                return i
+        if yt:
+            return yt[-1]
+    else:
+        for i in reversed(yt):
+            if not playing[i]:
+                return i
+        if yt:
+            return None  # every YouTube tab is playing: results go to a new tab, music keeps playing
+    return choose_tab(urls, "__no_such_host__")  # an empty tab if there is one, else None
+
+
 def choose_tab(urls: list[str], host: str) -> int | None:
     """Which existing tab to reuse for `host`: a tab already on that site (most recent first), else an empty
     new tab; None means "open a new tab". Pure function so the tab rule is unit-tested."""
@@ -249,7 +311,20 @@ class FakeBrowser:
         self.last_results: list[dict[str, str]] = []
         self.last_site = "web"
         self.tab_urls: list[str] = ["about:blank"]
+        self.playing: set[int] = set()  # indices of tabs with a playing video
         self.active = 0
+
+    def _yt_tab(self, purpose: str, url: str) -> int:
+        flags = [i in self.playing for i in range(len(self.tab_urls))]
+        i = choose_youtube_tab(self.tab_urls, flags, purpose)
+        if i is None:
+            self.tab_urls.append(url)
+            i = len(self.tab_urls) - 1
+        else:
+            self.tab_urls[i] = url
+            self.playing.discard(i)
+        self.active = i
+        return i
 
     def _goto_on(self, host: str, url: str) -> None:
         i = choose_tab(self.tab_urls, host)
@@ -265,7 +340,7 @@ class FakeBrowser:
         if self.captcha:
             raise CaptchaDetected("https://www.bing.com/challenge")
         if site == "youtube":
-            self._goto_on(YT_HOST, YT_SEARCH_URL + quote_plus(query))
+            self._yt_tab("search", YT_SEARCH_URL + quote_plus(query))
             self.last_results = [{"title": f"{query} video {i}", "url": f"https://www.youtube.com/watch?v={i}",
                                   "host": "youtube.com"} for i in range(1, max_results + 1)]
         else:
@@ -280,7 +355,7 @@ class FakeBrowser:
             raise BrowserError(f"no result #{index} (last search returned {len(self.last_results)})")
         item = self.last_results[index - 1]
         if self.last_site == "youtube":
-            self._goto_on(YT_HOST, item["url"])
+            self.playing.add(self._yt_tab("play", item["url"]))
         else:
             self.tab_urls.append(item["url"])
             self.active = len(self.tab_urls) - 1
@@ -288,7 +363,7 @@ class FakeBrowser:
 
     def youtube_play(self, query: str) -> dict[str, Any]:
         self.calls.append(("youtube_play", query))
-        self._goto_on(YT_HOST, "https://www.youtube.com/watch?v=x")
+        self.playing.add(self._yt_tab("play", "https://www.youtube.com/watch?v=" + quote_plus(query)))
         return {"title": f"{query} (official video)", "url": "https://www.youtube.com/watch?v=x", "playing": True,
                 "position_s": 3.0}
 
@@ -296,6 +371,7 @@ class FakeBrowser:
         self.calls.append(("tabs", action))
         if action == "close" and self.tab_urls:
             self.tab_urls.pop(self.active)
+            self.playing = {i if i < self.active else i - 1 for i in self.playing if i != self.active}
             self.active = max(0, len(self.tab_urls) - 1)
         elif action in ("next", "previous") and self.tab_urls:
             self.active = (self.active + (1 if action == "next" else -1)) % len(self.tab_urls)
