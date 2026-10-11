@@ -58,3 +58,21 @@ def test_capabilities_endpoint(api):
     client, rig, _ = api
     caps = client.get("/capabilities").json()
     assert {g["id"] for g in caps["groups"]} >= {"apps", "search", "music", "volume", "tabs", "pc", "ai"}
+
+
+def test_quick_actions_parse(kb, rig):
+    """The PWA's quick-action cards must run real tools (a card once sent "Play or pause music", which
+    searched YouTube for "or pause music", and another asked to lock the PC, which no tool can do)."""
+    import re
+    from pathlib import Path
+    hero = Path(__file__).resolve().parents[2] / "mobile-pwa" / "src" / "components" / "MicrophoneHero.tsx"
+    src = hero.read_text(encoding="utf-8")
+    commands = re.findall(r'command: "([^"]+)"', src)
+    assert len(commands) >= 4
+    expected = {"Volume up 20%": "media_control", "Pause the music": "media_control", "Next song": "media_control",
+                "What's on the screen?": "look_at_screen"}
+    for c in commands:
+        call = match_shortcut(rig.orch.normalize(c), kb)
+        assert call is not None, f"quick action does not parse: {c!r}"
+        assert call.tool == expected.get(c, call.tool), (c, call.tool)
+        assert call.tool != "youtube_play", c

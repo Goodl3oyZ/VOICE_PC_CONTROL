@@ -3639,3 +3639,105 @@ a.btn-setup-submit { text-decoration: none; display: flex; justify-content: cent
   }
 }
 
+
+/* ---- Mic section: one orb = one mic, one mode switch (Hold · Tap · Hands-free) ---- */
+.ai-orb.is-interactive {
+  cursor: pointer;
+  touch-action: none; /* holding the orb must not scroll the page or start text selection */
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+}
+
+.ai-orb.is-interactive:focus-visible {
+  outline: 2px solid #22d3ee;
+  outline-offset: 6px;
+  border-radius: 50%;
+}
+
+.hero-status-pill .pulse-indicator {
+  background-color: currentColor;
+  box-shadow: 0 0 8px currentColor;
+}
+
+.hero-status-pill.tone-ready { border-color: rgba(16, 185, 129, 0.4); color: #34d399; }
+.hero-status-pill.tone-live {
+  border-color: rgba(6, 182, 212, 0.6);
+  color: #22d3ee;
+  animation: hud-pill-glow 1.5s infinite alternate;
+}
+.hero-status-pill.tone-live .pulse-indicator { animation: pulse-dot 1s infinite; }
+.hero-status-pill.tone-busy { border-color: rgba(139, 92, 246, 0.45); color: #c084fc; }
+.hero-status-pill.tone-busy .pulse-indicator { animation: pulse-dot 1s infinite; }
+.hero-status-pill.tone-warn { border-color: rgba(245, 158, 11, 0.45); color: #fbbf24; }
+.hero-status-pill.tone-error { border-color: rgba(239, 68, 68, 0.45); color: #f87171; }
+
+[data-theme="light"] .hero-status-pill.tone-ready { color: #047857; }
+[data-theme="light"] .hero-status-pill.tone-live { color: #0e7490; }
+[data-theme="light"] .hero-status-pill.tone-busy { color: #6d28d9; }
+[data-theme="light"] .hero-status-pill.tone-warn { color: #b45309; }
+[data-theme="light"] .hero-status-pill.tone-error { color: #b91c1c; }
+
+.hero-job-text {
+  color: var(--text-primary);
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.mic-mode-row {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  margin: 4px 0 18px;
+}
+
+.mic-mode-row .mode-switch-group {
+  max-width: 100%;
+}
+
+.mic-mode-row .mode-pill {
+  min-height: 36px;
+  white-space: nowrap;
+}
+
+.speak-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.82rem;
+  color: var(--text-secondary);
+  cursor: pointer;
+  min-height: 32px;
+}
+
+.speak-toggle input {
+  width: 18px;
+  height: 18px;
+  accent-color: #22d3ee;
+}
+
+/* Room for the orb's ripples/float so they are never clipped by the card or covered by the status pill */
+.hero-orb-wrap {
+  margin: 22px 0 26px;
+}
+
+/* Typed text must not run under the Send button */
+.command-text-input {
+  padding-right: 112px;
+}
+
+/* Phones: the earlier 480px rule is overridden by the base .ai-orb rule further down the file, so the
+   small orb sizes are re-applied here (last in the cascade). */
+@media (max-width: 480px) {
+  .hero-orb-wrap { margin: 18px 0 22px; }
+  .ai-orb { width: 170px; height: 170px; }
+  .orb-ripple-ring.r1 { width: 110px; height: 110px; }
+  .orb-ripple-ring.r2 { width: 140px; height: 140px; }
+  .orb-ripple-ring.r3 { width: 170px; height: 170px; }
+  .orb-ambient-glow { width: 140px; height: 140px; }
+  .orb-holo-sphere { width: 104px; height: 104px; }
+  .orb-plasma-core { width: 36px; height: 36px; }
+  .hud-quick-controls { gap: 8px; }
+  .hud-card-title { white-space: nowrap; font-size: 0.72rem; }
+}

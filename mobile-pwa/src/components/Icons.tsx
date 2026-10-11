@@ -299,3 +299,27 @@ export function PowerIcon({ size = 20, ...props }: IconProps) {
 }
 
 
+
+export function SkipIcon(props: IconProps) {
+  return <MediaIcon {...props} />;
+}
+
+export function PlayPauseIcon({ size = 20, ...props }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}>
+      <polygon points="3 5 11 12 3 19 3 5" />
+      <line x1="15" x2="15" y1="5" y2="19" />
+      <line x1="20" x2="20" y1="5" y2="19" />
+    </svg>
+  );
+}
+
+export function MonitorIcon({ size = 20, ...props }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}>
+      <rect x="2" y="3" width="20" height="14" rx="2" />
+      <line x1="8" x2="16" y1="21" y2="21" />
+      <line x1="12" x2="12" y1="17" y2="21" />
+    </svg>
+  );
+}

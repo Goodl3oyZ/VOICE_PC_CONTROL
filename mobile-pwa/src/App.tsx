@@ -17,7 +17,6 @@ import { CommandGuide } from "./components/CommandGuide";
 import { OfflineBanner } from "./components/OfflineBanner";
 import { InstallPrompt } from "./components/InstallPrompt";
 import { EnglishOnlyNotice } from "./components/EnglishOnlyNotice";
-import { HandsFreePanel } from "./components/HandsFreePanel";
 import { BottomNav, type NavTab } from "./components/BottomNav";
 import type { OrbState } from "./components/AIOrb";
 
@@ -280,22 +279,24 @@ function Remote({ api, email, theme, onToggleTheme, onSessionLost, onLogout, onU
   const activeJobsCount = jobs.filter(isActive).length;
 
   const [navTab, setNavTab] = useState<NavTab>("home");
-  const [successFlash, setSuccessFlash] = useState(false);
+  const [flash, setFlash] = useState<"success" | "error" | null>(null);
   const prevJobStates = useRef<Map<string, string>>(new Map());
 
-  // Flash success state briefly when a job transitions to done
+  // Flash the orb briefly when a job finishes (done -> success, failed -> error), then back to idle.
   useEffect(() => {
+    let next: "success" | "error" | null = null;
     for (const j of jobs) {
-      const prevState = prevJobStates.current.get(j.id);
-      if (prevState && prevState !== "done" && j.state === "done") {
-        setSuccessFlash(true);
-        const timer = window.setTimeout(() => setSuccessFlash(false), 2500);
-        return () => window.clearTimeout(timer);
+      const prev = prevJobStates.current.get(j.id);
+      if (prev && prev !== j.state) {
+        if (j.state === "done") next = "success";
+        else if (j.state === "failed") next = "error";
       }
-    }
-    for (const j of jobs) {
       prevJobStates.current.set(j.id, j.state);
     }
+    if (!next) return;
+    setFlash(next);
+    const timer = window.setTimeout(() => setFlash(null), 2500);
+    return () => window.clearTimeout(timer);
   }, [jobs]);
 
   // Derive Orb state strictly from active system and job state
@@ -303,15 +304,9 @@ function Remote({ api, email, theme, onToggleTheme, onSessionLost, onLogout, onU
     if (!wsUp || pc2Online === false) return "offline";
     if (mic.state === "denied" || mic.state === "insecure") return "error";
     if (mic.state === "recording") return "listening";
-    if (successFlash) return "success";
-    if (activeJob?.state === "failed" || activeJob?.state === "cancelled") return "error";
-    if (
-      activeJob?.state === "transcribing" ||
-      activeJob?.state === "planning" ||
-      activeJob?.state === "clarifying" ||
-      activeJob?.state === "routing" ||
-      activeJob?.state === "awaiting_confirm"
-    ) {
+    if (handsFree.state === "hearing" || handsFree.state === "armed") return "listening";
+    if (flash) return flash;
+    if (activeJob?.state === "transcribing" || activeJob?.state === "planning" || activeJob?.state === "routing") {
       return "processing";
     }
     if (
@@ -323,7 +318,7 @@ function Remote({ api, email, theme, onToggleTheme, onSessionLost, onLogout, onU
       return "executing";
     }
     return "idle";
-  }, [wsUp, pc2Online, mic.state, successFlash, activeJob?.state]);
+  }, [wsUp, pc2Online, mic.state, handsFree.state, flash, activeJob?.state]);
 
   const handleEmergencyStop = () => {
     api
@@ -386,10 +381,24 @@ function Remote({ api, email, theme, onToggleTheme, onSessionLost, onLogout, onU
                 mic={mic}
                 wsUp={wsUp}
                 pc2Online={pc2Online}
-                busy={busy}
                 currentJobState={activeJob?.state}
+                currentJobText={activeJob?.text || null}
                 orbState={orbState}
-                recentJobText={activeJob?.text || null}
+                handsFree={handsFree}
+                micMode={handsFree.on ? "handsfree" : mic.mode}
+                onMicMode={(m) => {
+                  if (m === "handsfree") {
+                    if (!handsFree.on) {
+                      if (!speakOn) toggleSpeak(); // hands-free is pointless without spoken replies
+                      handsFree.toggle();
+                    }
+                    return;
+                  }
+                  if (handsFree.on) handsFree.toggle();
+                  mic.setMode(m);
+                }}
+                speakOn={speakOn}
+                onToggleSpeak={toggleSpeak}
                 onExecuteCommand={(cmd) => submit(api.sendText(cmd))}
               />
             </section>
@@ -420,20 +429,6 @@ function Remote({ api, email, theme, onToggleTheme, onSessionLost, onLogout, onU
               />
             </section>
 
-            {/* Hands-Free Voice Control Panel */}
-            <section className="hands-free-section" aria-label="Hands-free listening">
-              <HandsFreePanel
-                state={handsFree.state}
-                error={handsFree.error}
-                on={handsFree.on}
-                onToggle={() => {
-                  if (!handsFree.on && !speakOn) toggleSpeak();
-                  handsFree.toggle();
-                }}
-                speakOn={speakOn}
-                onToggleSpeak={toggleSpeak}
-              />
-            </section>
           </div>
         )}
 
@@ -470,6 +465,10 @@ function Remote({ api, email, theme, onToggleTheme, onSessionLost, onLogout, onU
                     >
                       Command Capabilities Guide
                     </button>
+                    {/* Same-origin GET: the HttpOnly session/device cookies authenticate the download. */}
+                    <a className="btn-settings-action" href="/audit/export?format=csv&days=30" download>
+                      Download audit log (30 days, CSV)
+                    </a>
                     <button
                       type="button"
                       className="btn-settings-action"
