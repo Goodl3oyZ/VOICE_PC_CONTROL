@@ -67,7 +67,10 @@ def build(settings: Settings | None = None) -> FastAPI:
                                                   llm_timeout_s=s.llm_timeout_s, language=s.language,
                                                   tool_timeout_s=s.tool_timeout_s,
                                                   stt_timeout_s=float(os.environ.get("VPC_STT_TIMEOUT_S", "20")),
-                                                  heartbeat_enabled=heartbeat is not None))
+                                                  heartbeat_enabled=heartbeat is not None,
+                                                  pc2_mac=os.environ.get("VPC_PC2_MAC", ""),
+                                                  wol_broadcast=os.environ.get("VPC_WOL_BROADCAST",
+                                                                               "255.255.255.255")))
     webauth = None
     if s.public_url:
         if len(s.session_secret) < 32:

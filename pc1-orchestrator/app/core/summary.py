@@ -137,6 +137,15 @@ def summarize(tool: str, args: dict[str, Any], result: ToolResult, kb: Knowledge
         titles = " · ".join((tb.get("title") or tb.get("host") or "New tab")[:40] for tb in tabs[:6])
         return t["tabs"].format(n=len(tabs), titles=titles)
     d = result.data
+    if tool == "wake_pc":
+        if d.get("already"):
+            return "PC2 is already awake"
+        if d.get("online"):
+            return f"PC2 is awake (took {d.get('secs')} s)"
+        return ("Wake signal sent, but PC2 did not come online (it may be powered off, or Wake-on-LAN is off "
+                "in its settings)")
+    if tool == "look_at_screen":
+        return str(d.get("description") or t["done"])
     if tool == "open_project":
         return t["opened_project"].format(project=args["project"], ide=d.get("ide", "the IDE"))
     if tool == "list_files":
@@ -192,7 +201,10 @@ def coding_report(job: Any, llm_message: str, language: str = "en") -> str:
     verdict = "tests PASSED" if passed else ("tests FAILED" if tests else "tests not run")
     where = f"{len(edits)} edit(s) on branch {branch} ({', '.join(files)})" if edits else "no files changed"
     head = llm_message.strip().rstrip(".") or "Coding task finished"
-    if tests and not passed:
+    tried_edit = any(s["tool"] == "edit_file" for s in steps)
+    if (tests and not passed) or (tried_edit and not edits):
         head = "Not finished — " + head
+    if tried_edit and not edits:
+        where = "no change could be applied"
     return (f"{head}. {where}; {verdict}. "
             f"Say “show the diff for {project}” or “revert the changes in {project}”.")

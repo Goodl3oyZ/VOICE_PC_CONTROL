@@ -206,3 +206,26 @@ def test_python_guardrails_block_deleting_functions_and_syntax_errors(agent, rep
     r = call(client, "edit_file", {"project": "demo", "path": "calc.py", "old_text": "def add(a, b):\n    return a + b",
                                    "new_text": "def plus(a, b):\n    return a + b", "allow_removing": True})
     assert r["ok"]  # an explicit rename is still possible
+
+
+
+def test_double_escaped_quotes_are_accepted(agent, repo):
+    """G3 runs 2 and 4: the model sent shout(...) + \\"!\\" (JSON-escaped twice)."""
+    client, _ = agent
+    (repo / "s.py").write_text('def shout(t):\n    return t.upper() + "!"\n')
+    git(repo, "-c", "user.name=t", "-c", "user.email=t@t", "add", ".")
+    git(repo, "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "-m", "s")
+    r = call(client, "edit_file", {"project": "demo", "path": "s.py",
+                                   "old_text": 'return t.upper() + \\"!\\"',
+                                   "new_text": 'return t.upper() + \\"!!!\\"'})
+    assert r["ok"], r
+    assert (repo / "s.py").read_text() == 'def shout(t):\n    return t.upper() + "!!!"\n'
+
+
+def test_wrong_indentation_is_repaired_when_that_makes_valid_python(agent, repo):
+    """G3 run 4: a docstring edit came back with the wrong indentation (unexpected indent)."""
+    client, _ = agent
+    r = call(client, "edit_file", {"project": "demo", "path": "calc.py", "old_text": "def add(a, b):\n    return a + b",
+                                   "new_text": "    def add(a, b):\n        \"\"\"Add.\"\"\"\n        return a + b"})
+    assert r["ok"], r
+    assert (repo / "calc.py").read_text() == 'def add(a, b):\n    """Add."""\n    return a + b\n'

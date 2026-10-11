@@ -2,10 +2,8 @@ import {
   DownloadIcon,
   LaptopIcon,
   MoonIcon,
-  SettingsIcon,
   StopIcon,
   SunIcon,
-  WifiOffIcon,
 } from "./Icons";
 
 interface HeaderProps {
@@ -13,8 +11,8 @@ interface HeaderProps {
   wsUp: boolean;
   theme: "dark" | "light";
   onToggleTheme: () => void;
-  onOpenSettings: () => void;
   onEmergencyStop: () => void;
+  onOpenSettings?: () => void;
   canInstallPwa?: boolean;
   onInstallPwa?: () => void;
 }
@@ -24,18 +22,17 @@ export function Header({
   wsUp,
   theme,
   onToggleTheme,
-  onOpenSettings,
   onEmergencyStop,
   canInstallPwa,
   onInstallPwa,
 }: HeaderProps) {
   return (
     <header className="app-header">
-      {/* Brand & Connection Badges */}
+      {/* Brand & Connection Badge */}
       <div className="header-left">
         <div className="brand-logo-group">
           <div className="brand-icon-halo">
-            <LaptopIcon size={20} className="brand-icon" />
+            <LaptopIcon size={18} className="brand-icon" />
           </div>
           <div className="brand-text">
             <span className="brand-name">Voice PC</span>
@@ -43,30 +40,28 @@ export function Header({
           </div>
         </div>
 
-        {/* Live link status pill */}
-        <div
-          className={`link-status-pill ${
-            pc2Online ? "online" : pc2Online === false ? "offline" : "pending"
-          }`}
-          title={pc2Online ? "PC2 online" : "PC2 not connected"}
-        >
-          <span className="status-dot" />
-          <span className="status-text">
-            PC2 {pc2Online ? "online" : pc2Online === false ? "offline" : "…"}
-          </span>
-        </div>
-
-        {!wsUp && (
-          <div className="ws-reconnect-pill" title="Lost the live connection to PC1">
-            <WifiOffIcon size={13} />
-            <span>Reconnecting…</span>
+        {/* Single unified status pill */}
+        {!wsUp ? (
+          <div className="link-status-pill reconnecting" title="Lost connection to PC1 orchestrator">
+            <span className="status-dot warning" />
+            <span className="status-text">Reconnecting…</span>
+          </div>
+        ) : (
+          <div
+            className={`link-status-pill ${pc2Online ? "online" : pc2Online === false ? "offline" : "pending"}`}
+            title={pc2Online ? "PC2 agent is connected and ready" : "PC2 agent offline"}
+          >
+            <span className="status-dot" />
+            <span className="status-text">
+              {pc2Online ? "PC2 Online" : pc2Online === false ? "PC2 Offline" : "Checking…"}
+            </span>
           </div>
         )}
       </div>
 
       {/* Header Actions */}
       <div className="header-right">
-        {/* Sticky Emergency Kill Switch */}
+        {/* Sticky Emergency STOP Switch */}
         <button
           type="button"
           className="header-stop-button"
@@ -74,7 +69,7 @@ export function Header({
           aria-label="Emergency stop"
           title="Stop everything on PC1 and PC2 now"
         >
-          <StopIcon size={16} />
+          <StopIcon size={14} />
           <span className="stop-text">STOP</span>
         </button>
 
@@ -87,7 +82,7 @@ export function Header({
             aria-label="Install app"
             title="Install Voice PC Remote on this device"
           >
-            <DownloadIcon size={18} />
+            <DownloadIcon size={17} />
           </button>
         )}
 
@@ -99,20 +94,10 @@ export function Header({
           aria-label={theme === "dark" ? "Switch to light theme" : "Switch to dark theme"}
           title={theme === "dark" ? "Light mode" : "Dark mode"}
         >
-          {theme === "dark" ? <SunIcon size={18} /> : <MoonIcon size={18} />}
-        </button>
-
-        {/* Settings / Token modal trigger */}
-        <button
-          type="button"
-          className="header-icon-button"
-          onClick={onOpenSettings}
-          aria-label="Account and device"
-          title="Account and device"
-        >
-          <SettingsIcon size={18} />
+          {theme === "dark" ? <SunIcon size={17} /> : <MoonIcon size={17} />}
         </button>
       </div>
     </header>
   );
 }
+

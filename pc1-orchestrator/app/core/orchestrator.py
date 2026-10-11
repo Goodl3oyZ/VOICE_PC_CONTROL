@@ -36,6 +36,7 @@ from .policy import PolicyContext, RateLimiter, decide
 from .shortcuts import match_shortcut
 from .summary import coding_report, deny_message, summarize
 from .wake import DEFAULT_WAKE_WORDS, wake_filter
+from .wol import send_magic_packet
 
 log = logging.getLogger("pc1.orchestrator")
 S = JobState
@@ -66,6 +67,9 @@ class OrchestratorConfig:
     multi_step: bool = False  # Phase 1: one tool per command; ReAct loop comes in Phase 3
     heartbeat_enabled: bool = False
     pc2_offline_after_s: float = 15.0
+    pc2_mac: str = ""  # Wake-on-LAN target (Phase 4); "" = not set up
+    wol_broadcast: str = "255.255.255.255"
+    wake_wait_s: float = 120.0
     breaker_threshold: int = 3
     breaker_cooldown_s: float = 30.0
     rate_limit_per_min: int = 20
@@ -351,7 +355,7 @@ class Orchestrator:
             plan = await self._plan(job)
             if job.terminal:
                 return
-            if plan.kind == "clarify" and _is_coding(job) and not any(h.get("auto") for h in job.history):
+            if plan.kind == "clarify" and _is_coding(job) and not _nudged(job, "1"):
                 # Mid-task questions from a small model are usually "the edit/tests failed, what now?".
                 # Answer once on the user's behalf (recorded in the job's history); a second question goes
                 # to the user.
@@ -374,7 +378,15 @@ class Orchestrator:
                 return
             call = plan.call
             if job.steps and job.steps[-1]["tool"] == call.tool \
-                    and job.steps[-1]["arguments"] == call.arguments:
+                    and all(job.steps[-1]["arguments"].get(k) == v for k, v in call.arguments.items()):
+                last = job.steps[-1]["result"]
+                if _is_coding(job) and not last.get("ok") and not _nudged(job, "repeat"):
+                    # Repeating a call that just failed: tell the model once what to do differently.
+                    job.history.append({"q": f"(repeated the failed {call.tool} call)", "auto": "repeat",
+                                        "a": f"That exact call already failed: {last.get('error')}. Do something "
+                                             "different: read_file again and copy old_text exactly, or use "
+                                             "old_text '' to add new code at the end."})
+                    continue
                 await self._fail(job, self.t("loop_repeat"))
                 return
 
@@ -401,6 +413,9 @@ class Orchestrator:
                                "expires_at": self.clock() + self.cfg.confirm_timeout_s}
                 await self._move(job, S.AWAITING_CONFIRM)
                 asyncio.create_task(self._expire_confirm(job, decision.args_hash))
+                return
+            if call.tool == "wake_pc":  # runs on PC1: PC2 is asleep
+                await self._wake_now(job)
                 return
             if call.tool == "stop_all":  # never queue behind the job it has to stop (US-903)
                 await self._stop_now(job)
@@ -458,6 +473,38 @@ class Orchestrator:
         self._event(job, "plan", "fail", t0)
         return plan
 
+    async def _wake_now(self, job: Job) -> None:
+        t0 = self.clock()
+        if not self.cfg.pc2_mac:
+            await self._fail(job, self.t("wol_not_set"))
+            return
+        await self._move(job, S.DISPATCHING)
+        await self._move(job, S.RUNNING)
+        if self.pc2_online:
+            data: dict[str, Any] = {"sent": False, "online": True, "already": True}
+        else:
+            await asyncio.to_thread(send_magic_packet, self.cfg.pc2_mac, self.cfg.wol_broadcast)
+            self._audit("wake_pc", job, {"broadcast": self.cfg.wol_broadcast})
+            online = False
+            while self.clock() - t0 < self.cfg.wake_wait_s and not job.terminal:
+                await asyncio.sleep(min(3.0, self.cfg.wake_wait_s))
+                if await self.heartbeat():
+                    online = True
+                    break
+            data = {"sent": True, "online": online, "secs": round(self.clock() - t0)}
+        if job.terminal:
+            return
+        await self._move(job, S.VERIFYING)
+        result = ToolResult(ok=True, verified=True, data=data,  # outcome checked: online or not
+                            error=None if data["online"] else "PC2 did not come online")
+        job.steps.append({"tool": "wake_pc", "arguments": {}, "result": result.model_dump()})
+        self._event(job, "tool", "ok" if data["online"] else "fail", t0, tool="wake_pc", risk=0)
+        job.summary = summarize("wake_pc", {}, result, self.kb, self.cfg.language)
+        if data["online"]:
+            await self._done(job)
+        else:
+            await self._fail(job, job.summary)
+
     async def _stop_now(self, job: Job) -> None:
         t0 = self.clock()
         res = await self.stop(job.device, keep=job.id)
@@ -483,7 +530,7 @@ class Orchestrator:
             await self._fail(job, self.t("breaker"))
             return False
         if self.cfg.heartbeat_enabled and not self.pc2_online:
-            await self._fail(job, self.t("pc2_offline"))
+            await self._fail(job, self.t("pc2_offline_wol" if self.cfg.pc2_mac else "pc2_offline"))
             return False
         step = len(job.steps)
         async with self._pc2_lock:  # one job at a time per PC2 (§14.7)
@@ -514,6 +561,8 @@ class Orchestrator:
                         risk=TOOLS[tool].risk)
         if job.terminal:  # stopped while PC2 was working
             return False
+        if tool == "look_at_screen" and result.ok:
+            result = await self._describe_screen(result, args.get("question") or "What is on the screen?")
         await self._move(job, S.VERIFYING)
         job.steps.append({"tool": tool, "arguments": args, "result": result.model_dump()})
         if result.untrusted:
@@ -527,6 +576,20 @@ class Orchestrator:
             await self._fail(job, job.summary)
             return False
         return True
+
+    async def _describe_screen(self, result: ToolResult, question: str) -> ToolResult:
+        """Replace the screenshot with the vision model's answer; the image itself is never stored."""
+        image = result.data.get("image_jpeg_b64")
+        if not image or not hasattr(self.llm, "describe_image"):
+            return ToolResult(ok=False, error="vision is not available")
+        try:
+            text = await asyncio.wait_for(self.llm.describe_image(image, question), self.cfg.llm_timeout_s * 4)
+        except Exception as e:  # noqa: BLE001 — report, never crash the job
+            log.warning("vision failed: %s", e)
+            return ToolResult(ok=False, error="could not read the screen")
+        return ToolResult(ok=bool(text), verified=bool(text), untrusted=True,
+                          data={"description": text, "screen": result.data.get("screen")},
+                          error=None if text else "no answer from the vision model")
 
     async def _ask(self, job: Job) -> None:
         await self._move(job, S.CLARIFYING)
@@ -618,6 +681,10 @@ CODING_NUDGE = ("Please continue without asking me: fix the problem yourself (re
 CODING_LOOP_TOOLS = frozenset({"list_files", "read_file", "search_code", "git_status", "edit_file", "run_tests",
                                "git_diff"})
 RECOVERABLE_CODING_TOOLS = frozenset({"list_files", "read_file", "search_code", "edit_file"})
+
+
+def _nudged(job: Job, kind: str) -> bool:
+    return any(h.get("auto") == kind for h in job.history)
 
 
 def mentioned_project(text: str, kb: Knowledge) -> str | None:

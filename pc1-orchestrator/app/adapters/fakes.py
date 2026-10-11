@@ -31,6 +31,13 @@ class ScriptedLLM:
         self.calls: list[tuple[str, PlanContext]] = []
         self.delay = delay
 
+    vision_answer = "A code editor is open."
+    images_seen = 0
+
+    async def describe_image(self, image_b64: str, question: str) -> str:
+        self.images_seen += 1
+        return self.vision_answer
+
     async def plan(self, text: str, ctx: PlanContext) -> PlanResult:
         self.calls.append((text, ctx))
         if self.delay:

@@ -152,6 +152,11 @@ class EditFileArgs(ProjectArgs):
     allow_removing: bool = Field(False, description="Only if the task asks to delete/rename functions or classes")
 
 
+class LookArgs(_Args):
+    question: str = Field("What is on the screen?", min_length=2, max_length=200,
+                          description="What to find out from the screen")
+
+
 @dataclass(frozen=True)
 class ToolSpec:
     name: str
@@ -168,6 +173,7 @@ TOOLS: dict[str, ToolSpec] = {
         ToolSpec("open_app", 1, OpenAppArgs, "Open an allowed app on PC2 (เปิดโปรแกรมที่อยู่ใน allowlist)", 1),
         ToolSpec("open_url", 1, OpenUrlArgs, "Open an allowed https website in the PC2 browser (เปิดเว็บที่อนุญาต)", 1),
         ToolSpec("get_status", 0, NoArgs, "Show PC2 status and which apps are running (ดูสถานะ PC2)", 1),
+        ToolSpec("wake_pc", 0, NoArgs, "Wake PC2 from sleep with Wake-on-LAN (sent by PC1)", 4),
         ToolSpec("stop_all", 0, NoArgs, "Stop everything that is running right now (หยุดงานทั้งหมด)", 1),
         # Disabled: it opened a NEW tab in the user's Chrome on every search. web_search (agent browser)
         # reuses the existing search/YouTube tab instead. Kept for VPC_LANGUAGE=th installs that rely on it.
@@ -189,6 +195,9 @@ TOOLS: dict[str, ToolSpec] = {
         ToolSpec("browser_tabs", 1, BrowserTabsArgs,
                  "List, switch (next/previous) or close tabs in the agent browser", 2),
         # Phase 3 — coding. Reads are risk 0; edits/tests change files -> risk 2 (git branch + checkpoint).
+        # Phase 4 — vision: a screenshot is described on PC1 and dropped (never stored)
+        ToolSpec("look_at_screen", 1, LookArgs,
+                 "Look at the PC2 screen and answer a question about what is visible", 4),
         ToolSpec("open_project", 1, ProjectArgs, "Open a registered project in the IDE (Cursor) on PC2", 3),
         ToolSpec("list_files", 0, ListFilesArgs, "List files and folders of a registered project", 3),
         ToolSpec("read_file", 0, ReadFileArgs, "Read a text file of a registered project", 3),

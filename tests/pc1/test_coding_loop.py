@@ -198,3 +198,30 @@ async def test_first_mid_task_question_is_answered_by_pc1(rig_factory):
     job2 = await rig2.run_text("in demo do something")
     assert job2.state == S.CLARIFYING and job2.question == "Q2?"  # a second question reaches the user
     await rig2.orch.cancel(job2.id, "phone")
+
+
+async def test_repeated_failed_call_gets_one_hint(rig_factory):
+    """G3 run 4: the same failing edit twice ended the job; now the model is told once to change approach."""
+    rig = rig_factory(language="en")
+    coding_pc2(rig, [True])
+    bad = {"project": "demo", "path": "calc.py", "old_text": "nope", "new_text": "x"}
+    rig.pc2.handlers["edit_file"] = lambda a: (
+        ToolResult(ok=False, error="old_text not found") if a["old_text"] == "nope"
+        else ToolResult(ok=True, verified=True, data={"branch": "ai/x", "stat": "1 file"}))
+    rig.llm.script = [tool("edit_file", **bad), tool("edit_file", **bad),
+                      tool("edit_file", project="demo", path="calc.py", old_text="", new_text="def f(): pass"),
+                      tool("run_tests", project="demo"), PlanResult(kind="final", message="Added f")]
+    job = await rig.run_text("in demo add f")
+    assert job.state == S.DONE and "tests PASSED" in job.summary
+    assert any(h.get("auto") == "repeat" for h in job.history)
+
+
+async def test_report_says_not_finished_when_no_edit_applied(rig_factory):
+    """G3 run 4 (C09): every edit failed, tests ran on unchanged code, model said DONE."""
+    rig = rig_factory(language="en")
+    coding_pc2(rig, [True])
+    rig.pc2.handlers["edit_file"] = lambda a: ToolResult(ok=False, error="not valid Python")
+    rig.llm.script = [tool("edit_file", project="demo", path="calc.py", old_text="a", new_text="b"),
+                      tool("run_tests", project="demo"), PlanResult(kind="final", message="Added a docstring")]
+    job = await rig.run_text("in demo add a docstring")
+    assert job.summary.startswith("Not finished — Added a docstring. no change could be applied")

@@ -61,6 +61,8 @@ def create_app(orch: Orchestrator, store: SqliteStore, broadcaster: Broadcaster,
     @contextlib.asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         await orch.recover()  # close jobs a previous run left unfinished (they can never complete)
+        warm = getattr(orch.llm, "warm", None)
+        warm_task = asyncio.create_task(warm()) if warm else None  # load the model now, not on the first command
         task = None
         if heartbeat_interval:
             async def beat() -> None:
@@ -71,6 +73,8 @@ def create_app(orch: Orchestrator, store: SqliteStore, broadcaster: Broadcaster,
         yield
         if task:
             task.cancel()
+        if warm_task:
+            warm_task.cancel()
 
     app = FastAPI(title="Voice PC Control — PC1 Orchestrator", version="0.1.0", lifespan=lifespan)
 

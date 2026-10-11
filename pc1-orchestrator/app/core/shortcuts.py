@@ -127,6 +127,13 @@ def _project_cmd(text: str, kb: Knowledge) -> ToolCall | None:
     return None
 
 
+WAKE_RE = re.compile(r"^(please\s+)?(wake(\s+up)?|turn\s+on|power\s+on|switch\s+on)\s+(the\s+|my\s+)?"
+                     r"(pc2?|computer|laptop|notebook)(\s+up)?\W*$", re.I)
+LOOK_RE = re.compile(r"^(what('?s| is)\s+(on|in)\s+(the\s+|my\s+)?screen|describe\s+(the\s+|my\s+)?screen|"
+                     r"look\s+at\s+(the\s+|my\s+)?screen|what\s+do\s+you\s+see(\s+on\s+(the\s+|my\s+)?screen)?)"
+                     r"\W*$", re.I)
+
+
 def match_shortcut(normalized: str, kb: Knowledge) -> ToolCall | None:
     text = " ".join(normalized.strip().strip(".!?,").split())
     text = _EN_TAIL.sub("", _EN_LEAD.sub("", text)).strip(" .!?,")
@@ -134,6 +141,11 @@ def match_shortcut(normalized: str, kb: Knowledge) -> ToolCall | None:
         return ToolCall(tool="stop_all", rationale="shortcut: stop")
     if STATUS_RE.match(text):
         return ToolCall(tool="get_status", rationale="shortcut: status")
+    if WAKE_RE.match(text):
+        return ToolCall(tool="wake_pc", rationale="shortcut: wake-on-lan")
+    if LOOK_RE.match(text):
+        return ToolCall(tool="look_at_screen", arguments={"question": "What is on the screen?"},
+                        rationale="shortcut: look")
     project = _project_cmd(text, kb)
     if project is not None:
         return project

@@ -39,10 +39,17 @@ def capabilities(kb: Knowledge, language: str = "en") -> dict[str, Any]:
         {"id": "tabs", "title": "Browser tabs", "hint": "Tabs of the agent browser",
          "examples": ["Next tab", "Previous tab", "Close this tab", "What tabs are open?"]},
         {"id": "pc", "title": "Computer", "hint": "Stop works at any time",
-         "examples": ["Status", "What's running on the PC?", "Stop everything", "Help"]},
+         "examples": ["Status", "What's running on the PC?", "Stop everything", "Wake up the PC", "Help"]},
+        {"id": "screen", "title": "Screen", "hint": "The local AI looks at PC2's screen; the picture is not kept",
+         "examples": ["What's on the screen?", "Describe the screen"]},
+        *([{"id": "code", "title": "Code projects",
+            "hint": "AI edits happen on an ai/… git branch; main is never touched",
+            "examples": [f"Run the tests in {p}", f"Show the diff for {p}", f"Revert the changes in {p}"]}
+           for p in list(kb.projects)[:1]]),
         {"id": "ai", "title": "Just ask naturally", "hint": "The local AI works out what you mean",
          "examples": ["I need to do some math", "I'd like to write some notes", "Take me to GitHub",
-                      "It's too loud, turn it down a bit"]},
+                      "It's too loud, turn it down a bit",
+                      *[f"In the {p} project, add a function multiply to calc.py" for p in list(kb.projects)[:1]]]},
     ]
     return {
         "language": language,

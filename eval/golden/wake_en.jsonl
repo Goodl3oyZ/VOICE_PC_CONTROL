@@ -1,0 +1,30 @@
+{"id": "N01", "text": "We should order pizza tonight.", "expect": "ignore"}
+{"id": "N02", "text": "My computer at work is really slow.", "expect": "ignore"}
+{"id": "N03", "text": "Did you see the game last night?", "expect": "ignore"}
+{"id": "N04", "text": "I need to buy a new computer mouse.", "expect": "ignore"}
+{"id": "N05", "text": "Can you open the window, it's hot in here.", "expect": "ignore"}
+{"id": "N06", "text": "Stop talking about work, please.", "expect": "ignore"}
+{"id": "N07", "text": "The computer science exam is on Friday.", "expect": "ignore"}
+{"id": "N08", "text": "Play with the dog for a while.", "expect": "ignore"}
+{"id": "N09", "text": "Next week we are going to Chiang Mai.", "expect": "ignore"}
+{"id": "N10", "text": "Turn left at the next traffic light.", "expect": "ignore"}
+{"id": "N11", "text": "Open the door, someone is knocking.", "expect": "ignore"}
+{"id": "N12", "text": "I think the computer is broken again.", "expect": "ignore"}
+{"id": "N13", "text": "Search the drawer for the keys.", "expect": "ignore"}
+{"id": "N14", "text": "That movie was amazing, you should watch it.", "expect": "ignore"}
+{"id": "N15", "text": "Pause for a second, I lost my train of thought.", "expect": "ignore"}
+{"id": "N16", "text": "Volume of the TV is too loud.", "expect": "ignore"}
+{"id": "N17", "text": "He works as a computer programmer.", "expect": "ignore"}
+{"id": "N18", "text": "Let's have dinner at seven.", "expect": "ignore"}
+{"id": "N19", "text": "Mute your microphone during the meeting.", "expect": "ignore"}
+{"id": "N20", "text": "Thank you very much.", "expect": "ignore"}
+{"id": "W01", "text": "Computer, open Chrome.", "expect": "command"}
+{"id": "W02", "text": "Computer, next song.", "expect": "command"}
+{"id": "W03", "text": "Computer, pause the music.", "expect": "command"}
+{"id": "W04", "text": "Hey computer, what's on the screen?", "expect": "command"}
+{"id": "W05", "text": "Computer, open notepad.", "expect": "command"}
+{"id": "W06", "text": "Computer, volume up.", "expect": "command"}
+{"id": "W07", "text": "Computer, stop.", "expect": "command"}
+{"id": "W08", "text": "Computer, search for weather in Bangkok.", "expect": "command"}
+{"id": "W09", "text": "Computer.", "expect": "wake_only"}
+{"id": "W10", "text": "Okay computer, status.", "expect": "command"}

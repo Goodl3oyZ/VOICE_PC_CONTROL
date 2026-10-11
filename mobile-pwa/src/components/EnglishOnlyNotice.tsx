@@ -1,18 +1,48 @@
+import { useState } from "react";
+import { XIcon } from "./Icons";
+
 /**
- * Always-visible notice: the speech model on this server is reliable in English only, so commands in any
- * other language are rejected by the server ("Only English is supported…") instead of being guessed.
+ * Notice: speech model on this server is reliable in English only.
+ * Dismissible by user to avoid cluttering screen.
  */
 export function EnglishOnlyNotice({ compact = false }: { compact?: boolean }) {
+  const [dismissed, setDismissed] = useState(() => {
+    try {
+      return localStorage.getItem("vpc.hide_en_notice") === "1";
+    } catch {
+      return false;
+    }
+  });
+
+  if (dismissed) return null;
+
+  const handleDismiss = () => {
+    setDismissed(true);
+    try {
+      localStorage.setItem("vpc.hide_en_notice", "1");
+    } catch {
+      /* ignore */
+    }
+  };
+
   return (
     <div className={`english-only-notice${compact ? " compact" : ""}`} role="note" aria-label="Language notice">
       <span className="eon-flag" aria-hidden="true">EN</span>
       <div className="eon-text">
         <strong>English only.</strong>{" "}
         <span>
-          Speak or type your commands in English, e.g. “open Chrome”, “next song”, “search weather in Bangkok”.
-          Commands in other languages (including Thai) are rejected and nothing is run.
+          Speak or type commands in English (e.g. “open Chrome”, “next song”).
         </span>
       </div>
+      <button
+        type="button"
+        className="eon-dismiss"
+        onClick={handleDismiss}
+        aria-label="Dismiss language notice"
+      >
+        <XIcon size={14} />
+      </button>
     </div>
   );
 }
+

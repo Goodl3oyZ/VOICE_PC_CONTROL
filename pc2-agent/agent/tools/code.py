@@ -12,8 +12,10 @@ from __future__ import annotations
 import ast
 import json
 import os
+import re
 import subprocess
 import sys
+import textwrap
 import time
 from pathlib import Path
 from typing import Any
@@ -223,6 +225,29 @@ def _find_span(text: str, old: str) -> tuple[int, int, bool]:
     return starts[first], starts[last + 1] - 1, True  # whole lines, without the final line break
 
 
+def _unescape_quotes(s: str) -> str:
+    return s.replace('\\"', '"').replace("\\'", "'")
+
+
+def _parses(src: str) -> bool:
+    try:
+        ast.parse(src)
+    except SyntaxError:
+        return False
+    return True
+
+
+def _reindent(new_text: str, before: str, a: int) -> str:
+    """Re-indent replacement code to where it lands: the first line continues after the existing indentation
+    (or starts the line), later lines get that indentation."""
+    line_start = before.rfind("\n", 0, a) + 1
+    lead = before[line_start:a]
+    indent = lead if lead.strip() == "" else re.match(r"\s*", before[line_start:]).group(0)  # type: ignore[union-attr]
+    lines = textwrap.dedent(new_text).split("\n")
+    first = lines[0] if lead.strip() == "" else indent + lines[0]
+    return "\n".join([first] + [indent + ln if ln.strip() else ln for ln in lines[1:]])
+
+
 def _top_level_names(src: str) -> set[str]:
     return {n.name for n in ast.parse(src).body
             if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef))}
@@ -262,17 +287,29 @@ def edit_file(args: EditFileArgs, ctx: ToolContext) -> ToolResult:
     elif args.old_text:
         raise CodeError(f"file not found: {args.path}")
     new_text = args.new_text.replace("\r\n", "\n")
+    old_text = args.old_text.replace("\r\n", "\n")
     if before is None:
         after = new_text
-    elif args.old_text == "":  # append (e.g. a new function at the end of the module)
+    elif old_text == "":  # append (e.g. a new function at the end of the module)
         body = before if before.endswith("\n") or not before else before + "\n"
         sep = "" if not body or new_text.startswith("\n") else ("\n\n" if p.suffix == ".py" else "\n")
-        after = body + sep + (new_text if new_text.endswith("\n") else new_text + "\n")
+        added = textwrap.dedent(new_text) if p.suffix == ".py" else new_text  # appended code is top level
+        after = body + sep + (added if added.endswith("\n") else added + "\n")
     else:
-        a, b, linewise = _find_span(before, args.old_text.replace("\r\n", "\n"))
+        try:
+            a, b, linewise = _find_span(before, old_text)
+        except CodeError:
+            if '\\"' not in old_text and "\\'" not in old_text:
+                raise
+            # Models sometimes JSON-escape quotes twice (G3 run 2/4: shout(...) + \"!\")
+            old_text, new_text = (_unescape_quotes(old_text), _unescape_quotes(new_text))
+            a, b, linewise = _find_span(before, old_text)
         if linewise and new_text.endswith("\n"):
             new_text = new_text[:-1]  # the matched lines keep their own line break
         after = before[:a] + new_text + before[b:]
+        if p.suffix == ".py" and not _parses(after):
+            fixed = before[:a] + _reindent(new_text, before, a) + before[b:]
+            after = fixed if _parses(fixed) else after  # wrong indentation is the usual cause
     if p.suffix == ".py":
         _check_python_edit(before, after, args.allow_removing)
     branch = _ensure_ai_branch(ctx, args.project, root, entry.base_branch)

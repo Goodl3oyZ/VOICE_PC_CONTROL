@@ -18,18 +18,22 @@ import { OfflineBanner } from "./components/OfflineBanner";
 import { InstallPrompt } from "./components/InstallPrompt";
 import { EnglishOnlyNotice } from "./components/EnglishOnlyNotice";
 import { HandsFreePanel } from "./components/HandsFreePanel";
+import { BottomNav, type NavTab } from "./components/BottomNav";
+import type { OrbState } from "./components/AIOrb";
 
-const THEME_KEY = "voicepc.theme";
+
+const THEME_KEY = "voicepc.theme.v2";
 
 function readTheme(): "dark" | "light" {
   try {
     const saved = localStorage.getItem(THEME_KEY);
     if (saved === "light" || saved === "dark") return saved;
-    return window.matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark";
+    return "dark";
   } catch {
     return "dark";
   }
 }
+
 
 export default function App() {
   const api = useMemo(() => new Api(), []);
@@ -78,9 +82,11 @@ export default function App() {
           <div className="setup-card">
             <p className="setup-subtitle">{authError ? `Cannot reach the server: ${authError}` : "Checking your sign-in…"}</p>
             {authError && (
-              <button type="button" className="btn-setup-submit" onClick={refreshAuth}>
-                <span>Try again</span>
-              </button>
+              <div style={{ display: "flex", flexDirection: "column", gap: "10px", marginTop: "16px" }}>
+                <button type="button" className="btn-setup-submit" onClick={refreshAuth}>
+                  <span>Try again</span>
+                </button>
+              </div>
             )}
           </div>
         </div>
@@ -116,6 +122,7 @@ export default function App() {
     />
   );
 }
+
 interface RemoteProps {
   api: Api;
   email: string | null;
@@ -272,6 +279,52 @@ function Remote({ api, email, theme, onToggleTheme, onSessionLost, onLogout, onU
   const busy = jobs.some(isActive);
   const activeJobsCount = jobs.filter(isActive).length;
 
+  const [navTab, setNavTab] = useState<NavTab>("home");
+  const [successFlash, setSuccessFlash] = useState(false);
+  const prevJobStates = useRef<Map<string, string>>(new Map());
+
+  // Flash success state briefly when a job transitions to done
+  useEffect(() => {
+    for (const j of jobs) {
+      const prevState = prevJobStates.current.get(j.id);
+      if (prevState && prevState !== "done" && j.state === "done") {
+        setSuccessFlash(true);
+        const timer = window.setTimeout(() => setSuccessFlash(false), 2500);
+        return () => window.clearTimeout(timer);
+      }
+    }
+    for (const j of jobs) {
+      prevJobStates.current.set(j.id, j.state);
+    }
+  }, [jobs]);
+
+  // Derive Orb state strictly from active system and job state
+  const orbState = useMemo<OrbState>(() => {
+    if (!wsUp || pc2Online === false) return "offline";
+    if (mic.state === "denied" || mic.state === "insecure") return "error";
+    if (mic.state === "recording") return "listening";
+    if (successFlash) return "success";
+    if (activeJob?.state === "failed" || activeJob?.state === "cancelled") return "error";
+    if (
+      activeJob?.state === "transcribing" ||
+      activeJob?.state === "planning" ||
+      activeJob?.state === "clarifying" ||
+      activeJob?.state === "routing" ||
+      activeJob?.state === "awaiting_confirm"
+    ) {
+      return "processing";
+    }
+    if (
+      activeJob?.state === "created" ||
+      activeJob?.state === "dispatching" ||
+      activeJob?.state === "running" ||
+      activeJob?.state === "verifying"
+    ) {
+      return "executing";
+    }
+    return "idle";
+  }, [wsUp, pc2Online, mic.state, successFlash, activeJob?.state]);
+
   const handleEmergencyStop = () => {
     api
       .stop()
@@ -287,7 +340,7 @@ function Remote({ api, email, theme, onToggleTheme, onSessionLost, onLogout, onU
   };
 
   return (
-    <div className="app-shell">
+    <div className="app-shell has-bottom-nav">
       {/* Offline Banner */}
       <OfflineBanner />
 
@@ -297,7 +350,7 @@ function Remote({ api, email, theme, onToggleTheme, onSessionLost, onLogout, onU
         wsUp={wsUp}
         theme={theme}
         onToggleTheme={onToggleTheme}
-        onOpenSettings={() => setIsSettingsOpen(true)}
+        onOpenSettings={() => setNavTab("settings")}
         onEmergencyStop={handleEmergencyStop}
       />
 
@@ -307,90 +360,154 @@ function Remote({ api, email, theme, onToggleTheme, onSessionLost, onLogout, onU
       {/* Voice/text commands are accepted in English only */}
       <EnglishOnlyNotice />
 
-      {/* Responsive Main Layout Container */}
+      {/* Tabbed Content View */}
       <main className="app-main-layout">
-        {/* Left / Primary Column: Voice Hero + Active Inspector + Command Input */}
-        <div className="layout-col-primary">
-          {/* Active / Current Job Card */}
-          {activeJob && (
-            <section className="active-job-section" aria-label="Current command">
-              <ActiveJobCard
-                job={activeJob}
-                api={api}
-                onError={handleError}
-                onUpdate={(j) => {
-                  setJobs((l) => upsertJob(l, j));
-                  setSelectedJob(j);
-                }}
-                onNewJob={submit}
+        {navTab === "home" && (
+          <div className="tab-pane tab-home animate-fade-in">
+            {/* Active / Current Job Card */}
+            {activeJob && (
+              <section className="active-job-section" aria-label="Current command">
+                <ActiveJobCard
+                  job={activeJob}
+                  api={api}
+                  onError={handleError}
+                  onUpdate={(j) => {
+                    setJobs((l) => upsertJob(l, j));
+                    setSelectedJob(j);
+                  }}
+                  onNewJob={submit}
+                />
+              </section>
+            )}
+
+            {/* AI Assistant Centerpiece Hero */}
+            <section className="voice-assistant-section" aria-label="Voice command">
+              <MicrophoneHero
+                mic={mic}
+                wsUp={wsUp}
+                pc2Online={pc2Online}
+                busy={busy}
+                currentJobState={activeJob?.state}
+                orbState={orbState}
+                recentJobText={activeJob?.text || null}
+                onExecuteCommand={(cmd) => submit(api.sendText(cmd))}
               />
             </section>
-          )}
 
-          {/* Voice Assistant Primary Interaction Panel */}
-          <section className="voice-assistant-section" aria-label="Voice command">
-            <MicrophoneHero
-              mic={mic}
-              wsUp={wsUp}
-              pc2Online={pc2Online}
-              busy={busy}
-              currentJobState={activeJob?.state}
-            />
-            <HandsFreePanel
-              state={handsFree.state}
-              error={handsFree.error}
-              on={handsFree.on}
-              onToggle={() => {
-                if (!handsFree.on && !speakOn) toggleSpeak(); // hands-free is pointless without spoken replies
-                handsFree.toggle();
-              }}
-              speakOn={speakOn}
-              onToggleSpeak={toggleSpeak}
-            />
-          </section>
+            {/* Text Command Input & Quick Actions */}
+            <section className="command-input-section" aria-label="Type a command">
+              <CommandInput
+                onSubmitText={(txt) => submit(api.sendText(txt))}
+                busy={busy}
+                error={error}
+                onClearError={() => setError(null)}
+                onOpenGuide={() => setIsGuideOpen(true)}
+              />
+            </section>
+          </div>
+        )}
 
-          {/* Text Command Input & Quick Actions */}
-          <section className="command-input-section" aria-label="Type a command">
-            <CommandInput
-              onSubmitText={(txt) => submit(api.sendText(txt))}
-              busy={busy}
-              error={error}
-              onClearError={() => setError(null)}
-              onOpenGuide={() => setIsGuideOpen(true)}
-            />
-          </section>
-        </div>
+        {navTab === "activity" && (
+          <div className="tab-pane tab-activity animate-fade-in">
+            {/* Command History Feed */}
+            <section className="history-section-wrapper">
+              <CommandHistory
+                jobs={jobs}
+                onSelectJob={(j) => {
+                  setSelectedJob(j);
+                  setNavTab("home");
+                }}
+              />
+            </section>
 
-        {/* Right / Secondary Column: Telemetry + Command History */}
-        <div className="layout-col-secondary">
-          {/* PC System Telemetry & Remote Session */}
-          <section className="telemetry-section" aria-label="Computer status">
-            <PCStatusPanel
-              pc2Online={pc2Online}
-              pc2Data={pc2Data}
-              wsUp={wsUp}
-              totalJobs={jobs.length}
-              activeJobsCount={activeJobsCount}
-              onEmergencyStop={handleEmergencyStop}
-            />
-          </section>
+            {/* Hands-Free Voice Control Panel */}
+            <section className="hands-free-section" aria-label="Hands-free listening">
+              <HandsFreePanel
+                state={handsFree.state}
+                error={handsFree.error}
+                on={handsFree.on}
+                onToggle={() => {
+                  if (!handsFree.on && !speakOn) toggleSpeak();
+                  handsFree.toggle();
+                }}
+                speakOn={speakOn}
+                onToggleSpeak={toggleSpeak}
+              />
+            </section>
+          </div>
+        )}
 
-          {/* Command History Feed */}
-          <section className="history-section-wrapper">
-            <CommandHistory
-              jobs={jobs}
-              onSelectJob={(j) => setSelectedJob(j)}
-            />
-          </section>
-        </div>
+        {navTab === "settings" && (
+          <div className="tab-pane tab-settings animate-fade-in">
+            {/* PC System Telemetry & Remote Session */}
+            <section className="telemetry-section" aria-label="Computer status">
+              <PCStatusPanel
+                pc2Online={pc2Online}
+                pc2Data={pc2Data}
+                wsUp={wsUp}
+                totalJobs={jobs.length}
+                activeJobsCount={activeJobsCount}
+                onEmergencyStop={handleEmergencyStop}
+              />
+            </section>
+
+            {/* Account & Session Controls Card */}
+            <section className="settings-card-section" aria-label="Account and session settings">
+              <div className="settings-panel">
+                <div className="settings-panel-header">
+                  <h3>Device & Account</h3>
+                </div>
+                <div className="settings-panel-body">
+                  <div className="settings-row">
+                    <span className="settings-label">Account</span>
+                    <span className="settings-value">{email || "Secret Key Paired"}</span>
+                  </div>
+                  <div className="settings-actions-group">
+                    <button
+                      type="button"
+                      className="btn-settings-action"
+                      onClick={() => setIsGuideOpen(true)}
+                    >
+                      Command Capabilities Guide
+                    </button>
+                    <button
+                      type="button"
+                      className="btn-settings-action"
+                      onClick={onUnpair}
+                    >
+                      Unpair Device
+                    </button>
+                    <button
+                      type="button"
+                      className="btn-settings-action btn-danger"
+                      onClick={onLogout}
+                    >
+                      Sign Out
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </section>
+          </div>
+        )}
       </main>
+
+      {/* Bottom Navigation Bar */}
+      <BottomNav
+        active={navTab}
+        onChange={setNavTab}
+        activityCount={activeJobsCount}
+      />
 
       {/* "What can I say?" guide (from GET /capabilities) */}
       <CommandGuide
         isOpen={isGuideOpen}
         api={api}
         onClose={() => setIsGuideOpen(false)}
-        onRun={(cmd) => submit(api.sendText(cmd))}
+        onRun={(cmd) => {
+          submit(api.sendText(cmd));
+          setNavTab("home");
+        }}
       />
 
       {/* Account / Device Modal */}
@@ -404,3 +521,4 @@ function Remote({ api, email, theme, onToggleTheme, onSessionLost, onLogout, onU
     </div>
   );
 }
+
