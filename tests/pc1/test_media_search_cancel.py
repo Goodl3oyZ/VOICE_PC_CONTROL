@@ -197,3 +197,14 @@ async def test_spoken_stop_does_not_wait_for_the_running_job(rig):
     assert rig.orch.get_job(stop_job.id).state == S.DONE
     assert rig.orch.get_job(long_job.id).state == S.CANCELLED and rig.pc2.stopped >= 1
     await rig.orch.wait_idle()
+
+
+async def test_released_kill_switch_is_noticed_without_waiting_for_a_heartbeat(rig):
+    """US-607: after the PC2 hotkey releases the switch, the next command works at once."""
+    rig.pc2.kill_switch = True
+    await rig.orch.heartbeat()
+    job = await rig.run_text("open notepad")
+    assert job.state == S.FAILED and job.outcome == "denied"
+    rig.pc2.kill_switch = False  # released on PC2; PC1's cached status still says "on"
+    job = await rig.run_text("open notepad")
+    assert job.state == S.DONE

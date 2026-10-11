@@ -276,6 +276,7 @@ function Remote({ api, email, theme, onToggleTheme, onSessionLost, onLogout, onU
                   setJobs((l) => upsertJob(l, j));
                   setSelectedJob(j);
                 }}
+                onNewJob={submit}
               />
             </section>
           )}

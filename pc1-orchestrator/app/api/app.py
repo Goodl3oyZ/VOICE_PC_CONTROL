@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import Annotated, Any
 
 from fastapi import Depends, FastAPI, File, HTTPException, Query, Request, UploadFile, WebSocket
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 from starlette.websockets import WebSocketDisconnect
@@ -19,6 +19,7 @@ from starlette.websockets import WebSocketDisconnect
 from ..adapters.agent_hub import AgentHub
 from ..adapters.notify import Broadcaster
 from ..adapters.sqlite_store import SqliteStore
+from ..core.audit_export import export_audit
 from ..core.capabilities import capabilities
 from ..core.orchestrator import Conflict, NotFound, Orchestrator
 from .webauth import WebAuth
@@ -136,6 +137,19 @@ def create_app(orch: Orchestrator, store: SqliteStore, broadcaster: Broadcaster,
             d.pop("history", None)
             out.append(d)
         return out
+
+    @app.get("/audit/export")
+    async def audit_export(_: Device, fmt: str = Query("jsonl", alias="format", pattern="^(jsonl|csv)$"),
+                           days: int = Query(30, ge=1, le=3650)) -> Response:
+        """Download the audit log (US-704); the trailer says whether the hash chain verified."""
+        import time
+
+        rows, ok = await asyncio.to_thread(lambda: (store.audit_rows(), store.verify_audit()))
+        text = export_audit(rows, ok, time.time() - days * 86400, fmt)
+        name = time.strftime("voicepc-audit-%Y%m%d") + "." + fmt
+        return Response(text, media_type="text/csv" if fmt == "csv" else "application/x-ndjson",
+                        headers={"Content-Disposition": f'attachment; filename="{name}"',
+                                 "Cache-Control": "no-store"})
 
     @app.get("/jobs/{job_id}")
     async def job(job_id: str, _: Device) -> dict[str, Any]:

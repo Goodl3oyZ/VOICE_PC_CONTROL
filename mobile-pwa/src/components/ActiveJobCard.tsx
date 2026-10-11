@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import type { Api, Job } from "../api";
+import { CodeChangesPanel } from "./CodeChangesPanel";
 import {
   STATE_LABEL,
   STATE_DESC,
@@ -23,9 +24,10 @@ interface ActiveJobCardProps {
   api: Api;
   onError: (e: unknown) => void;
   onUpdate: (j: Job) => void;
+  onNewJob: (p: Promise<Job>) => void;
 }
 
-export function ActiveJobCard({ job, api, onError, onUpdate }: ActiveJobCardProps) {
+export function ActiveJobCard({ job, api, onError, onUpdate, onNewJob }: ActiveJobCardProps) {
   const [answer, setAnswer] = useState("");
   const sent = useRef(false);
 
@@ -203,6 +205,9 @@ export function ActiveJobCard({ job, api, onError, onUpdate }: ActiveJobCardProp
           <div className="summary-body">{job.summary}</div>
         </div>
       )}
+
+      {/* Phase 3: diff + revert for coding jobs */}
+      {isTerminal && <CodeChangesPanel job={job} api={api} onNewJob={onNewJob} />}
 
       {/* Error report */}
       {job.error && (

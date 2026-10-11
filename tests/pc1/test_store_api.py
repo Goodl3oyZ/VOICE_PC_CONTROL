@@ -159,3 +159,36 @@ def test_orchestrator_config_defaults():
     cfg = OrchestratorConfig()
     assert cfg.confirm_timeout_s == 120 and cfg.max_steps == 8 and not cfg.multi_step
     assert Orchestrator  # imported for completeness
+
+
+def test_us704_audit_export_jsonl_and_csv(api):
+    """Export covers the requested window; the trailer reports the WHOLE chain's verification."""
+    from app.core.audit_export import export_audit
+
+    api, rig, _ = api
+    store = rig.store
+    r = api.post("/command", json={"text": "open notepad"})
+    _wait_state(api, r.json()["id"], {"done"})
+    res = api.get("/audit/export")
+    assert res.status_code == 200 and "attachment" in res.headers["content-disposition"]
+    lines = [json.loads(x) for x in res.text.strip().splitlines()]
+    trailer = lines[-1]["export"]
+    assert trailer["chain_ok"] is True and trailer["rows"] == len(lines) - 1 > 0
+    assert any(x["kind"] == "state" for x in lines[:-1]) and lines[-2]["hash"] == trailer["last_hash"]
+    csv_text = api.get("/audit/export?format=csv").text
+    import csv
+    import io
+    csv_rows = list(csv.reader(io.StringIO(csv_text)))
+    assert csv_rows[0] == ["seq", "time", "kind", "job_id", "tool", "state", "data", "hash"]
+    assert csv_rows[-1][0] == "#" and json.loads(csv_rows[-1][1])["export"]["chain_ok"] is True
+    assert api.get("/audit/export?format=xml").status_code == 422
+
+    store._db.execute("UPDATE audit SET data=? WHERE seq=1", (json.dumps({"to": "tampered"}),))
+    assert json.loads(api.get("/audit/export").text.strip().splitlines()[-1])["export"]["chain_ok"] is False
+    assert json.loads(export_audit(store.audit_rows(), True, since=time.time() + 60).strip())["export"]["rows"] == 0
+
+
+def test_audit_export_requires_auth(api):
+    api, *_ = api
+    api.headers.pop("Authorization", None)
+    assert api.get("/audit/export").status_code == 401

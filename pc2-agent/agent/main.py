@@ -15,6 +15,7 @@ from pathlib import Path
 import uvicorn
 
 from .config import AgentConfig
+from .hotkey import start_hotkey_thread
 from .launcher import WindowsLauncher
 from .server import create_app
 
@@ -66,10 +67,12 @@ def main() -> None:
         from .connector import run_connector
         cfg.allowed_clients = ["127.0.0.1"]  # relayed requests enter in-process from the connector only
         app = create_app(cfg, secret, WindowsLauncher())
+        start_hotkey_thread(app, cfg.killswitch_hotkey)
         asyncio.run(run_connector(app, cfg.pc1_ws_url, secret))
         return
     wait_for_address(cfg.bind_host, cfg.port)
     app = create_app(cfg, secret, WindowsLauncher())
+    start_hotkey_thread(app, cfg.killswitch_hotkey)
     uvicorn.run(app, host=cfg.bind_host, port=cfg.port, ssl_certfile=cfg.tls_certfile,
                 ssl_keyfile=cfg.tls_keyfile, log_level="info")
 

@@ -98,3 +98,40 @@ export function formatTime(timestampSeconds: number): string {
     return "";
   }
 }
+
+/** Phase 3: what the phone shows for a job that touched a code project (diff + revert). */
+export interface CodeContext {
+  project: string;
+  diff: string | null;
+  files: string[];
+  hasChanges: boolean;
+}
+
+const CODE_TOOLS = new Set(["edit_file", "run_tests", "git_diff", "git_status", "read_file", "search_code", "list_files"]);
+
+export function codeContext(job: Job): CodeContext | null {
+  const steps = job.steps || [];
+  const coding = steps.filter((s) => CODE_TOOLS.has(s.tool) && typeof s.arguments.project === "string");
+  if (coding.length === 0) return null;
+  const last = steps[steps.length - 1];
+  if (last && last.tool === "revert_changes") return null;
+  const project = coding[0].arguments.project as string;
+  const diffStep = [...steps].reverse().find((s) => s.tool === "git_diff" && s.result.ok);
+  const diffData = diffStep?.result.data ?? {};
+  const files = Array.isArray(diffData.files) ? (diffData.files as string[]) : [];
+  const edited = steps.some((s) => s.tool === "edit_file" && s.result.ok);
+  const diff = typeof diffData.diff === "string" && diffData.diff ? (diffData.diff as string) : null;
+  return { project, diff, files, hasChanges: edited || files.length > 0 };
+}
+
+export type DiffLineKind = "add" | "del" | "hunk" | "meta" | "ctx";
+
+export function diffLineKind(line: string): DiffLineKind {
+  if (line.startsWith("+++") || line.startsWith("---") || line.startsWith("diff ") || line.startsWith("index ")) {
+    return "meta";
+  }
+  if (line.startsWith("@@")) return "hunk";
+  if (line.startsWith("+")) return "add";
+  if (line.startsWith("-")) return "del";
+  return "ctx";
+}

@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import type { Job } from "./api";
 import {
   STATE_LABEL,
+  codeContext,
+  diffLineKind,
   STATE_DESC,
   describeCall,
   formatDuration,
@@ -93,5 +95,33 @@ describe("labels", () => {
     expect(riskLabel(1)).toContain("Level 1");
     expect(riskLabel(4)).toContain("Level 4");
     expect(riskLabel(99)).toContain("Risk level 99");
+  });
+});
+
+describe("codeContext (Phase 3)", () => {
+  const job = (steps: Job["steps"]) => ({ steps }) as unknown as Job;
+  const step = (tool: string, data: Record<string, unknown> = {}, ok = true) => ({
+    tool,
+    arguments: { project: "demo" },
+    result: { ok, verified: ok, data },
+  });
+
+  it("is null for non-coding jobs and after a revert", () => {
+    expect(codeContext(job([{ tool: "open_app", arguments: { app: "notepad" }, result: { ok: true, verified: true } }]))).toBeNull();
+    expect(codeContext(job([step("edit_file"), step("revert_changes")]))).toBeNull();
+  });
+
+  it("offers revert after an edit and shows the diff when present", () => {
+    const c = codeContext(job([step("read_file"), step("edit_file"), step("run_tests", { passed: true })]));
+    expect(c).toEqual({ project: "demo", diff: null, files: [], hasChanges: true });
+    const d = codeContext(job([step("git_diff", { files: ["calc.py"], diff: "+x\n-y" })]));
+    expect(d?.diff).toBe("+x\n-y");
+    expect(d?.hasChanges).toBe(true);
+  });
+
+  it("classifies diff lines", () => {
+    expect(["+++ b/a", "@@ -1 +1 @@", "+new", "-old", " same"].map(diffLineKind)).toEqual([
+      "meta", "hunk", "add", "del", "ctx",
+    ]);
   });
 });

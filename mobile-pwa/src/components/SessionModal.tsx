@@ -32,6 +32,19 @@ export function SessionModal({ isOpen, email, onClose, onLogout, onUnpair }: Ses
 
           <div className="modal-logout-section">
             <div>
+              <div className="logout-title">Audit log</div>
+              <div className="logout-desc">Every command and PC action of the last 30 days, with a tamper check</div>
+            </div>
+            {/* Same-origin GET: the HttpOnly session/device cookies authenticate the download. */}
+            <a className="btn-modal-logout" href="/audit/export?format=csv&days=30" download>
+              <span>Download CSV</span>
+            </a>
+          </div>
+
+          <hr className="modal-divider" />
+
+          <div className="modal-logout-section">
+            <div>
               <div className="logout-title">Sign out</div>
               <div className="logout-desc">Next time only Google sign-in is needed, not the Secret Key</div>
             </div>

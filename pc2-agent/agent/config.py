@@ -35,6 +35,7 @@ class AgentConfig:
     rate_limit_per_min: int = 30
     verify_timeout_s: float = 8.0
     tool_timeout_s: float = 15.0
+    killswitch_hotkey: str = "ctrl+alt+shift+k"  # local kill switch (US-607); "" disables
     data_dir: str = "agent-data"
     # Phase 2 agent browser: visible window, dedicated profile (default <data_dir>/chrome-profile)
     browser_headless: bool = False

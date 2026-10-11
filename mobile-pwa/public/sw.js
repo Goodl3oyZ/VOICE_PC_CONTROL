@@ -2,9 +2,12 @@
 // Strictly caches the application shell only.
 // API calls, WebSocket streams, tokens, and remote execution data are NEVER cached (§6).
 
-const CACHE_NAME = "voicepc-shell-v2";
+const CACHE_NAME = "voicepc-shell-v3"; // bump: purges anything cached by older versions
 const SHELL_ASSETS = ["/", "/index.html", "/manifest.webmanifest", "/icon.svg"];
-const NETWORK_ONLY_PREFIXES = ["/command", "/jobs", "/confirm", "/stop", "/status", "/events", "/health"];
+const NETWORK_ONLY_PREFIXES = [
+  "/command", "/jobs", "/confirm", "/stop", "/status", "/events", "/health",
+  "/auth", "/audit", "/capabilities", "/agent",
+];
 
 self.addEventListener("install", (event) => {
   event.waitUntil(

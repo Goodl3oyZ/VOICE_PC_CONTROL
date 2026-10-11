@@ -1249,6 +1249,76 @@ code, pre {
   color: var(--text-primary);
 }
 
+.code-changes-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.diff-view {
+  margin: 0;
+  max-height: 320px;
+  overflow: auto;
+  background: var(--bg-card);
+  border-radius: var(--radius-md);
+  padding: 8px 0;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.76rem;
+  line-height: 1.45;
+}
+
+.diff-line {
+  display: block;
+  padding: 0 10px;
+  white-space: pre;
+  color: var(--text-secondary);
+}
+
+.diff-add {
+  background: var(--color-success-bg);
+  color: var(--color-success);
+}
+
+.diff-del {
+  background: var(--color-danger-bg);
+  color: var(--color-danger);
+}
+
+.diff-hunk {
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+.diff-meta {
+  opacity: 0.7;
+}
+
+.code-actions-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.btn-code {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 40px;
+  padding: 0 14px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-subtle);
+  background: var(--bg-card);
+  color: var(--text-primary);
+  font: inherit;
+  font-size: 0.88rem;
+  cursor: pointer;
+}
+
+.btn-code-danger {
+  border-color: var(--color-danger-border);
+  color: var(--color-danger);
+}
+
 .job-error-box {
   background: var(--color-danger-bg);
   border: 1px solid var(--color-danger-border);

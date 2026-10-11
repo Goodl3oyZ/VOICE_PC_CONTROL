@@ -23,7 +23,11 @@ export interface Job {
   stt_confidence: number | null;
   question: string | null;
   pending: Pending | null;
-  steps: { tool: string; arguments: Record<string, unknown>; result: { ok: boolean; verified: boolean } }[];
+  steps: {
+    tool: string;
+    arguments: Record<string, unknown>;
+    result: { ok: boolean; verified: boolean; data?: Record<string, unknown>; error?: string | null };
+  }[];
   summary: string;
   error: string | null;
   outcome: string | null;

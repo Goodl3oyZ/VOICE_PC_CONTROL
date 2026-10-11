@@ -340,6 +340,8 @@ class Orchestrator:
 
             await self._move(job, S.ROUTING)
             t0 = self.clock()
+            if self.pc2_status.get("kill_switch"):  # cached from the last heartbeat: may be released by now
+                await self.heartbeat()
             ctx = PolicyContext(self.kb, self.rate, bool(self.pc2_status.get("kill_switch")),
                                 job.tainted)
             decision = decide(call, ctx)
