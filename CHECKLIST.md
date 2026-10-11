@@ -107,8 +107,27 @@ the hardware decisions in chapter 13 (see "Open questions" below).
 - [ ] p95 ≤ 8 s end-to-end on real hardware
 - [x] Security tests TC-S01, S02, S06, S11 pass (automated); [ ] TC-S07 port scan, [ ] TC-S13 CI dep scan run in real CI
 
+## English-only mode (2026-10-12) — done
+- [x] `VPC_LANGUAGE=en`: Whisper auto-detects language; non-English speech/text rejected ("Only English is supported…"); English shortcuts, LLM prompt, results and errors; Thai kept behind `VPC_LANGUAGE=th`
+- [x] PWA fully English + permanent "English only" notice (main screen + sign-in)
+- [x] English golden set (`eval/golden/dev_en.jsonl`) on gemma4-e2b-qat: tool 95 %, refusal 100 %, clarify 100 %, LLM p50 0.45 s
+- [x] Real English speech (Windows TTS clips) → correct commands on PC1; Thai speech → rejected; Stop never asks for confirmation
+
+## Phase 2 (S4–S6) — in progress
+- [x] Agent browser: Playwright driving installed Chrome, **dedicated profile** `<agent data>/chrome-profile`, visible window, single worker thread (US-304)
+- [x] `web_search` — Bing results read in the agent browser, top results with real site names returned to the phone (US-301: 3.2 s, ≥3 links ✅)
+- [x] `open_result N`, `browser_tabs` list/next/previous/close (US-303)
+- [x] `youtube_play` — searches YouTube, clicks the first video, verifies it is **playing**
+- [x] CAPTCHA detection → stop and report, never bypass (US-305); Google's automated-search CAPTCHA is avoided by reading Bing instead
+- [x] Web results marked **untrusted** → job tainted → later risk ≥ 2 actions need confirmation (mechanism, US-604)
+- [x] Live E2E through PC1 relay: search → open result → tabs → play → pause → close tab
+- [ ] US-302 read & summarise a page with the LLM (untrusted content handling)
+- [ ] US-603 confirm card UI for risk-3 tools (backend done in Phase 1) + first risk-3 tool
+- [ ] US-401/402 files & Office (new file, original untouched)
+- [ ] Spotify: specific song/playlist needs Spotify Web API (Premium for playback) — Spotify not installed on PC2 yet
+- [ ] US-606 secrets canary test, US-608 red-team ≥ 30 prompt-injection cases, US-703 KPI dashboard → Gate G2
+
 ## Later phases — not started
-- [ ] Phase 2 (S4–S6): Playwright `search_browser`/`manage_tabs`, separate Agent browser profile, taint end-to-end with web content, CAPTCHA stop, files/Office, KPI dashboard, red-team ≥30 cases, Gate G2
 - [ ] Phase 3 (S7–S10): coding agent on git branches, run_tests, diff/revert on phone, multi-step ReAct, PC2 hotkey/tray kill switch, audit export, Gate G3
 - [ ] Phase 4 (S11–S14): wake word/VAD, voice "หยุดก่อน", Thai TTS, Wake-on-LAN, vision, final audit, (SIP), Gate G4
 

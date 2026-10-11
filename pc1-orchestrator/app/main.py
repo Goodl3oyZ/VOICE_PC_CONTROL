@@ -50,7 +50,7 @@ def build(settings: Settings | None = None) -> FastAPI:
             raise SystemExit("VPC_PC2_SECRET must be set (>= 32 chars) when VPC_PC2=relay")
         from .adapters.agent_hub import AgentHub, PC2RelayTools
         hub = AgentHub(s.pc2_secret.encode())
-        tools = PC2RelayTools(hub, s.pc2_secret.encode())
+        tools = PC2RelayTools(hub, s.pc2_secret.encode(), timeout=s.tool_timeout_s + 5)
         heartbeat = s.heartbeat_s
     elif s.pc2 == "http":
         if len(s.pc2_secret) < 32:
@@ -65,6 +65,7 @@ def build(settings: Settings | None = None) -> FastAPI:
                         config=OrchestratorConfig(confirm_timeout_s=s.confirm_timeout_s,
                                                   stt_confidence_min=s.stt_confidence_min,
                                                   llm_timeout_s=s.llm_timeout_s, language=s.language,
+                                                  tool_timeout_s=s.tool_timeout_s,
                                                   stt_timeout_s=float(os.environ.get("VPC_STT_TIMEOUT_S", "20")),
                                                   heartbeat_enabled=heartbeat is not None))
     webauth = None

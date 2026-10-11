@@ -8,3 +8,4 @@ psutil>=5.9
 # Optional, install where used:
 #   PC1: faster-whisper        (VPC_STT=faster_whisper)
 #   PC2: keyring               (store the HMAC secret in Windows Credential Manager)
+#   PC2: playwright==1.63.0    (Phase 2 agent browser; drives the installed Chrome, no browser download)

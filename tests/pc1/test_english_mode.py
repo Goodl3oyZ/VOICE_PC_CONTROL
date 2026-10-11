@@ -40,10 +40,19 @@ def test_is_english(text, ok):
     ("turn the volume down", "media_control", {"action": "volume_down", "steps": 5}),
     ("louder", "media_control", {"action": "volume_up", "steps": 5}),
     ("lower the volume by 10 percent", "media_control", {"action": "volume_down", "steps": 5}),
-    ("Search for weather in Bangkok", "search_web", {"query": "weather in Bangkok", "site": "google"}),
-    ("Play lofi hip hop on YouTube.", "search_web", {"query": "lofi hip hop", "site": "youtube"}),
-    ("play bodyslam", "search_web", {"query": "bodyslam", "site": "youtube"}),
-    ("look up python asyncio", "search_web", {"query": "python asyncio", "site": "google"}),
+    ("Search for weather in Bangkok", "web_search", {"query": "weather in Bangkok", "max_results": 5}),
+    ("Play lofi hip hop on YouTube.", "youtube_play", {"query": "lofi hip hop"}),
+    ("play bodyslam", "youtube_play", {"query": "bodyslam"}),
+    ("look up python asyncio", "web_search", {"query": "python asyncio", "max_results": 5}),
+    ("search docker on google", "search_web", {"query": "docker", "site": "google"}),
+    ("search lofi on youtube", "search_web", {"query": "lofi", "site": "youtube"}),
+    ("open result 2", "open_result", {"index": 2}),
+    ("Open the first result.", "open_result", {"index": 1}),
+    ("third link", "open_result", {"index": 3}),
+    ("next tab", "browser_tabs", {"action": "next"}),
+    ("go to the previous tab", "browser_tabs", {"action": "previous"}),
+    ("close this tab", "browser_tabs", {"action": "close"}),
+    ("what tabs are open", "browser_tabs", {"action": "list"}),
 ])
 def test_english_shortcuts(kb, rig, text, tool, args):
     call = match_shortcut(rig.orch.normalize(text), kb)

@@ -52,6 +52,18 @@ _SEARCH = re.compile(r"^(?P<verb>หาเพลง|ค้นหา|หา|searc
                      r"เล่นเพลง|play)\s*(?P<q>.+?)"
                      r"(\s*(ใน|บน|ที่|จาก|on|in)\s*(?P<site>youtube|google))?$", re.I)
 _MUSIC_VERBS = {"หาเพลง", "เปิดเพลง", "เล่นเพลง", "play"}
+_EN_READ_VERBS = {"search", "search for", "look up", "find"}  # Phase 2: read results in the agent browser
+_ORDINALS = {"first": 1, "second": 2, "third": 3, "fourth": 4, "fifth": 5, "sixth": 6, "seventh": 7,
+             "eighth": 8, "top": 1, "1st": 1, "2nd": 2, "3rd": 3, "4th": 4, "5th": 5}
+_OPEN_RESULT = re.compile(r"^(open|show|go\s+to|click)?\s*(the\s+)?((result|link|number)\s*(number\s*)?"
+                          r"(?P<n>\d)|(?P<ord>first|second|third|fourth|fifth|sixth|seventh|eighth|top|1st|2nd|3rd|"
+                          r"4th|5th)\s+(result|link|one))$", re.I)
+_TABS = [
+    (re.compile(r"^(go\s+to\s+(the\s+)?|switch\s+to\s+(the\s+)?)?next\s+tab$", re.I), "next"),
+    (re.compile(r"^(go\s+to\s+(the\s+)?|switch\s+to\s+(the\s+)?)?(previous|last)\s+tab$", re.I), "previous"),
+    (re.compile(r"^close\s+(this\s+|the\s+|current\s+)?tab$", re.I), "close"),
+    (re.compile(r"^((list|show)\s+(the\s+|all\s+)?tabs|what\s+tabs\s+are\s+open)$", re.I), "list"),
+]
 
 
 def _media_or_search(text: str) -> ToolCall | None:
@@ -66,8 +78,22 @@ def _media_or_search(text: str) -> ToolCall | None:
         steps = max(1, min(25, round(int(m["num"]) / 2))) if m["num"] else 5  # 1 step = 2 %
         return ToolCall(tool="media_control", arguments={"action": "volume_up" if up else "volume_down",
                                                          "steps": steps}, rationale="shortcut: volume")
+    for rx, action in _TABS:
+        if rx.match(t):
+            return ToolCall(tool="browser_tabs", arguments={"action": action}, rationale="shortcut: tabs")
+    m = _OPEN_RESULT.match(t)
+    if m:
+        n = int(m["n"]) if m["n"] else _ORDINALS[m["ord"].lower()]
+        if 1 <= n <= 8:
+            return ToolCall(tool="open_result", arguments={"index": n}, rationale="shortcut: open result")
     m = _SEARCH.match(t)
     if m and m["q"].strip():
+        verb, q, site = m["verb"].lower(), m["q"].strip()[:200], (m["site"] or "").lower()
+        if verb == "play" and site in ("", "youtube"):  # actually play it, not just list results
+            return ToolCall(tool="youtube_play", arguments={"query": q}, rationale="shortcut: play")
+        if " ".join(verb.split()) in _EN_READ_VERBS and not site:
+            return ToolCall(tool="web_search", arguments={"query": q, "max_results": 5},
+                            rationale="shortcut: web search")
         music = m["verb"].lower() in _MUSIC_VERBS
         site = (m["site"] or ("youtube" if music else "google")).lower()
         return ToolCall(tool="search_web", arguments={"query": m["q"].strip()[:200], "site": site},

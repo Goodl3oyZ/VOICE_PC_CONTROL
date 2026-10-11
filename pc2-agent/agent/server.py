@@ -32,7 +32,7 @@ IDEMPOTENCY_TTL_S = 600
 
 def create_app(cfg: AgentConfig, secret: bytes, launcher: Launcher,
                clock: Callable[[], float] = time.time,
-               sleep: Callable[[float], None] = time.sleep) -> FastAPI:
+               sleep: Callable[[float], None] = time.sleep, browser: Any = None) -> FastAPI:
     if len(secret) < 32:
         raise ValueError("agent secret must be at least 32 bytes")
     data_dir = Path(cfg.data_dir)
@@ -41,7 +41,11 @@ def create_app(cfg: AgentConfig, secret: bytes, launcher: Launcher,
     audit = AuditLog(data_dir / "audit.jsonl")
     nonces = NonceCache()
     idem: dict[str, tuple[float, dict[str, Any]]] = {}
-    ctx = ToolContext(cfg=cfg, launcher=launcher, kill=kill, sleep=sleep)
+    if browser is None:  # lazily started on the first browser tool call
+        from .browser import PlaywrightBrowser
+        profile = Path(cfg.browser_profile_dir) if cfg.browser_profile_dir else data_dir / "chrome-profile"
+        browser = PlaywrightBrowser(profile, headless=cfg.browser_headless)
+    ctx = ToolContext(cfg=cfg, launcher=launcher, kill=kill, sleep=sleep, browser=browser)
     run_lock = asyncio.Lock()
 
     app = FastAPI(title="Voice PC Control — PC2 Agent", version="0.1.0",

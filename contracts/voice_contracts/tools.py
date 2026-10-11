@@ -78,6 +78,35 @@ class MediaControlArgs(_Args):
     steps: int = Field(1, ge=1, le=25, description="Repeat count for volume (1 step = 2% volume)")
 
 
+# ---- Phase 2: agent browser (Playwright, dedicated Chrome profile on PC2) ----
+class _QueryArgs(_Args):
+    query: str = Field(min_length=1, max_length=200)
+
+    @field_validator("query")
+    @classmethod
+    def _printable(cls, v: str) -> str:
+        if any(ord(c) < 32 for c in v):
+            raise ValueError("control characters not allowed")
+        return v
+
+
+class WebSearchArgs(_QueryArgs):
+    max_results: int = Field(5, ge=1, le=8, description="How many results to return")
+
+
+class OpenResultArgs(_Args):
+    index: int = Field(ge=1, le=8, description="1-based number of a result from the last web_search")
+
+
+class YoutubePlayArgs(_QueryArgs):
+    pass
+
+
+class BrowserTabsArgs(_Args):
+    action: Literal["list", "next", "previous", "close"] = Field(
+        description="list open tabs, switch to next/previous tab, or close the current tab")
+
+
 @dataclass(frozen=True)
 class ToolSpec:
     name: str
@@ -100,6 +129,15 @@ TOOLS: dict[str, ToolSpec] = {
         ToolSpec("media_control", 1, MediaControlArgs,
                  "Control what is playing (Spotify, YouTube): play/pause, next/previous track, "
                  "volume up/down, mute. 1 volume step = 2% (ควบคุมเพลงและเสียง)", 1),
+        # Phase 2 — results from the web are UNTRUSTED data (taint): risk >= 2 tools then need confirmation.
+        ToolSpec("web_search", 0, WebSearchArgs,
+                 "Search the web in the agent browser on PC2 and return the top results (titles + links)", 2),
+        ToolSpec("open_result", 1, OpenResultArgs,
+                 "Open result number N from the last web_search in the agent browser", 2),
+        ToolSpec("youtube_play", 1, YoutubePlayArgs,
+                 "Find a video or song on YouTube and start playing the first result in the agent browser", 2),
+        ToolSpec("browser_tabs", 1, BrowserTabsArgs,
+                 "List, switch (next/previous) or close tabs in the agent browser", 2),
     ]
 }
 

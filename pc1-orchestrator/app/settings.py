@@ -28,6 +28,8 @@ class Settings:
     openai_url: str = field(default_factory=lambda: _env("VPC_OPENAI_URL", "http://127.0.0.1:10000"))
     openai_model: str = field(default_factory=lambda: _env("VPC_OPENAI_MODEL", ""))
     llm_timeout_s: float = field(default_factory=lambda: float(_env("VPC_LLM_TIMEOUT_S", "30")))
+    # browser tools (Phase 2) start Chrome and load pages: allow more than simple app launches
+    tool_timeout_s: float = field(default_factory=lambda: float(_env("VPC_TOOL_TIMEOUT_S", "45")))
     stt_device: str = field(default_factory=lambda: _env("VPC_STT_DEVICE", "cpu"))
     # --- public web access (Cloudflare tunnel): Google login + paired-device cookie ---
     public_url: str = field(default_factory=lambda: _env("VPC_PUBLIC_URL"))  # e.g. https://pc.example.com

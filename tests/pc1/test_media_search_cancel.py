@@ -37,12 +37,16 @@ def test_media_shortcuts(kb, text, action, steps):
     ("หา lofi ใน youtube", "lofi", "youtube"),
     ("เปิดเพลง ลาลาลอย", "ลาลาลอย", "youtube"),
     ("หาเพลง bodyslam หน่อย", "bodyslam", "youtube"),
-    ("search python asyncio", "python asyncio", "google"),
 ])
 def test_search_shortcuts(kb, text, query, site):
     call = match_shortcut(text, kb)
     assert call is not None and call.tool == "search_web"
     assert call.arguments == {"query": query, "site": site}
+
+
+def test_english_search_reads_results(kb):
+    # Phase 2: English "search X" reads results in the agent browser instead of only opening Google
+    assert match_shortcut("search python asyncio", kb).tool == "web_search"
 
 
 def test_stop_still_means_stop_all(kb):

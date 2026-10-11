@@ -40,6 +40,10 @@ TEXT = {
         "previous": "ย้อนกลับไปเพลงก่อนหน้าแล้ว", "volume_up": "เพิ่มเสียงประมาณ {pct}% แล้ว",
         "volume_down": "ลดเสียงประมาณ {pct}% แล้ว", "mute": "สลับปิด/เปิดเสียงแล้ว",
         "media": "ส่งคำสั่งควบคุมเพลงแล้ว", "done": "เสร็จแล้ว",
+        "results": "ผลค้นหา “{query}”: {items}. พูด “open result 2” เพื่อเปิด", "no_results": "ไม่พบผลลัพธ์",
+        "opened_result": "เปิดผลลัพธ์ที่ {index}: {title}", "playing": "กำลังเล่น “{title}” บน YouTube",
+        "tabs": "เปิดอยู่ {n} แท็บ: {titles}", "tab_switched": "สลับแท็บแล้ว: {title}",
+        "tab_closed": "ปิดแท็บแล้ว (เหลือ {n})", "captcha": "เจอ CAPTCHA จึงหยุดไว้ กรุณาทำเองบน PC2",
     },
     "en": {
         "failed": "Failed: {error}", "unknown": "unknown reason",
@@ -51,6 +55,11 @@ TEXT = {
         "previous": "Went back to the previous track", "volume_up": "Volume up about {pct}%",
         "volume_down": "Volume down about {pct}%", "mute": "Toggled mute",
         "media": "Sent the media command", "done": "Done",
+        "results": "Results for “{query}”: {items}. Say “open result 2” to open one", "no_results": "No results found",
+        "opened_result": "Opened result {index}: {title}", "playing": "Playing “{title}” on YouTube",
+        "tabs": "{n} tab(s) open: {titles}", "tab_switched": "Switched to: {title}",
+        "tab_closed": "Closed the tab ({n} left)",
+        "captcha": "CAPTCHA detected, stopped. Please solve it yourself on PC2",
     },
 }
 
@@ -64,6 +73,8 @@ def deny_message(reason: str, language: str = "th") -> str:
 
 def summarize(tool: str, args: dict[str, Any], result: ToolResult, kb: Knowledge, language: str = "th") -> str:
     t = TEXT.get(language, TEXT["th"])
+    if not result.ok and result.data.get("captcha"):
+        return t["captcha"]
     if not result.ok:
         return t["failed"].format(error=result.error or t["unknown"])
     if not result.verified:
@@ -86,4 +97,23 @@ def summarize(tool: str, args: dict[str, Any], result: ToolResult, kb: Knowledge
         steps = int(result.data.get("steps") or args.get("steps") or 1)
         action = args.get("action", "")
         return t.get(action, t["media"]).format(pct=steps * 2)
+    if tool == "web_search":
+        results = result.data.get("results") or []
+        if not results:
+            return t["no_results"]
+        items = " · ".join(f"{i}) {r.get('title', '')[:70]} — {r.get('host', '')}"
+                           for i, r in enumerate(results[:3], 1))
+        return t["results"].format(query=args["query"], items=items)
+    if tool == "open_result":
+        return t["opened_result"].format(index=args["index"], title=(result.data.get("title") or "")[:90])
+    if tool == "youtube_play":
+        return t["playing"].format(title=(result.data.get("title") or args["query"])[:90])
+    if tool == "browser_tabs":
+        tabs = result.data.get("tabs") or []
+        if args.get("action") == "close":
+            return t["tab_closed"].format(n=len(tabs))
+        if args.get("action") in ("next", "previous"):
+            return t["tab_switched"].format(title=(tabs[-1]["title"] if tabs else ""))
+        titles = " · ".join((tb.get("title") or tb.get("host") or "?")[:40] for tb in tabs[:6])
+        return t["tabs"].format(n=len(tabs), titles=titles)
     return t["done"]

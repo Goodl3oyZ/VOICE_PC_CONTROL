@@ -26,6 +26,9 @@ class AgentConfig:
     verify_timeout_s: float = 8.0
     tool_timeout_s: float = 15.0
     data_dir: str = "agent-data"
+    # Phase 2 agent browser: visible window, dedicated profile (default <data_dir>/chrome-profile)
+    browser_headless: bool = False
+    browser_profile_dir: str | None = None
     # Outbound mode: dial PC1 (e.g. wss://pc.example.com/agent/ws) instead of listening for PC1.
     pc1_ws_url: str | None = None
     bind_host: str = "127.0.0.1"

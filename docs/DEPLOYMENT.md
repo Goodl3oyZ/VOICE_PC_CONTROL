@@ -53,7 +53,7 @@ Design decisions behind this setup: [ADR-0002](adr/0002-ollama-gemma4-e2b.md) (O
 |---|---|
 | `<repo>\pc2-agent\` | Agent code, run directly from the repo |
 | `<repo>\pc2-agent\agent_config.local.json` | Live config (gitignored): app allowlist, `pc1_ws_url` |
-| `%LOCALAPPDATA%\voice-pc-agent\` | `agent.log`, `audit.jsonl` (hash chain), `killswitch.flag` |
+| `%LOCALAPPDATA%\voice-pc-agent\` | `agent.log`, `audit.jsonl` (hash chain), `killswitch.flag`, `chrome-profile\` (agent browser, separate from your own Chrome profile) |
 | Credential Manager → `voice-pc-control` / `pc2_secret` | HMAC secret (same value as `VPC_PC2_SECRET` on PC1) |
 | Task Scheduler → **VoicePC Agent** | Starts the agent at logon in the user session (not a service: UI automation needs the desktop) |
 
@@ -114,7 +114,7 @@ GitHub (Open WebUI only): an OAuth App has **one** callback URL — create a ded
 ### 3.5 PC2 — Windows agent
 ```powershell
 cd <repo>
-python -m venv .venv; .venv\Scripts\pip install -r requirements.txt keyring
+python -m venv .venv; .venv\Scripts\pip install -r requirements.txt keyring playwright==1.63.0
 # store the shared HMAC secret (same value as VPC_PC2_SECRET on PC1)
 .venv\Scripts\python -c "import keyring,getpass; keyring.set_password('voice-pc-control','pc2_secret', getpass.getpass())"
 copy pc2-agent\agent_config.json pc2-agent\agent_config.local.json   # edit apps + pc1_ws_url

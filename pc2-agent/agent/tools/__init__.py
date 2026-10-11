@@ -5,6 +5,7 @@ import threading
 import time
 from collections.abc import Callable
 from dataclasses import dataclass, field
+from typing import Any
 
 from pydantic import BaseModel
 
@@ -21,6 +22,7 @@ class ToolContext:
     launcher: Launcher
     kill: KillSwitch
     cancel: threading.Event = field(default_factory=threading.Event)
+    browser: Any = None  # agent.browser.Browser (Phase 2)
     sleep: Callable[[float], None] = time.sleep
     clock: Callable[[], float] = time.monotonic
 
@@ -46,4 +48,4 @@ def register(name: str) -> Callable[[ToolFn], ToolFn]:
     return deco
 
 
-from . import apps, media, status  # noqa: E402,F401  (registers tools)
+from . import apps, media, status, web  # noqa: E402,F401  (registers tools)
