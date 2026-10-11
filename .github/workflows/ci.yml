@@ -1,0 +1,53 @@
+name: ci
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - run: pip install -r requirements-dev.txt pytest-timeout
+      - run: ruff check .
+      - run: pytest -q --timeout=30 --cov --cov-fail-under=85
+
+  pwa:
+    runs-on: ubuntu-latest
+    defaults: { run: { working-directory: mobile-pwa } }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: "20" }
+      - run: npm ci --no-audit --no-fund
+      - run: npm run build
+      - run: npx vitest run
+      - run: npm audit --audit-level=high
+
+  security:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - run: pip install bandit pip-audit
+      - run: bandit -q -r contracts pc1-orchestrator/app pc2-agent/agent -s B101
+      - run: pip-audit -r requirements.txt
+      - uses: gitleaks/gitleaks-action@v2
+        env: { GITHUB_TOKEN: "${{ secrets.GITHUB_TOKEN }}" }
+
+  eval-shortcuts:
+    needs: quality
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - run: pip install -r requirements.txt
+      # Fake LLM: checks the rule layer and that no dangerous command is ever executed.
+      # The real-model gate (--llm ollama --min-tool-acc 0.90) runs on a self-hosted GPU runner.
+      - run: python eval/run.py --set dev

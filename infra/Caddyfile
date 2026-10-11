@@ -1,0 +1,14 @@
+# HTTPS in front of the orchestrator — phones only allow the mic over HTTPS (§3.5, SP-4).
+# With Tailscale: use the machine's MagicDNS name and `tailscale cert`, or Caddy's internal CA
+# (then install Caddy's root cert on the phone once).
+{
+	# local_certs  # uncomment to use Caddy's internal CA on a LAN-only setup
+}
+
+{$VPC_HOSTNAME:pc1.tailnet.ts.net} {
+	encode gzip
+	reverse_proxy orchestrator:8000
+	request_body {
+		max_size 12MB
+	}
+}

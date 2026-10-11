@@ -1,0 +1,36 @@
+{
+  "_comment": "System Knowledge (doc ch.6). Example values — edit to match your machines. Apps here must also exist in pc2-agent/agent_config.json.",
+  "apps": {
+    "chrome": {"display": "Chrome"},
+    "notepad": {"display": "Notepad"},
+    "spotify": {"display": "Spotify"},
+    "calculator": {"display": "เครื่องคิดเลข"},
+    "explorer": {"display": "File Explorer"},
+    "cursor": {"display": "Cursor"},
+    "vscode": {"display": "VS Code"}
+  },
+  "sites": {
+    "youtube": "https://www.youtube.com/",
+    "google": "https://www.google.com/",
+    "gmail": "https://mail.google.com/",
+    "github": "https://github.com/",
+    "facebook": "https://www.facebook.com/"
+  },
+  "allowed_hosts": ["youtube.com", "google.com", "github.com", "facebook.com", "wikipedia.org"],
+  "aliases": {
+    "กูเกิลโครม": "chrome", "กูเกิ้ลโครม": "chrome", "โครม": "chrome", "google chrome": "chrome",
+    "โน้ตแพด": "notepad", "โน๊ตแพด": "notepad", "โน้ตแพ็ด": "notepad", "โน้ตแพท": "notepad", "โน้ตแพ็ท": "notepad", "note pad": "notepad",
+    "สปอติฟาย": "spotify", "สปอติฟาย์": "spotify", "สปอทิฟาย": "spotify", "สะปอติฟาย": "spotify", "สปอตติฟาย": "spotify",
+    "เครื่องคิดเลข": "calculator", "แคลคูเลเตอร์": "calculator", "calc": "calculator",
+    "ไฟล์เอ็กซ์พลอเรอร์": "explorer", "file explorer": "explorer", "โฟลเดอร์": "explorer",
+    "เคอร์เซอร์": "cursor", "เคอเซอร์": "cursor",
+    "วีเอสโค้ด": "vscode", "วีเอสโค๊ด": "vscode", "vs code": "vscode", "visual studio code": "vscode",
+    "ยูทูบ": "youtube", "ยูทูป": "youtube", "you tube": "youtube",
+    "กูเกิล": "google", "กูเกิ้ล": "google",
+    "จีเมล": "gmail", "จีเมล์": "gmail",
+    "กิตฮับ": "github", "กิทฮับ": "github", "git hub": "github",
+    "เฟซบุ๊ก": "facebook", "เฟสบุ๊ค": "facebook", "เฟสบุ๊ก": "facebook", "เฟซบุ๊ค": "facebook"
+  },
+  "limits": ["ห้ามลบไฟล์โดยไม่ยืนยัน", "ห้ามรันคำสั่งนอก allowlist"],
+  "memory": ["browser=chrome", "ide=cursor", "shell=PowerShell"]
+}

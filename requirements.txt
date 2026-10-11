@@ -1,0 +1,10 @@
+# Runtime (PC1 orchestrator + PC2 agent). Pin exact versions + hashes before production (§20, T8).
+fastapi>=0.115
+uvicorn[standard]>=0.30
+pydantic>=2.7
+httpx>=0.27
+python-multipart>=0.0.9
+psutil>=5.9
+# Optional, install where used:
+#   PC1: faster-whisper        (VPC_STT=faster_whisper)
+#   PC2: keyring               (store the HMAC secret in Windows Credential Manager)
