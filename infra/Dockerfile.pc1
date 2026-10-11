@@ -1,5 +1,5 @@
 # PC1 orchestrator image (build context = repo root).
-FROM node:20.18-bookworm-slim AS pwa
+FROM node:22-bookworm-slim AS pwa
 WORKDIR /pwa
 COPY mobile-pwa/package.json mobile-pwa/package-lock.json ./
 RUN npm ci --no-audit --no-fund

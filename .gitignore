@@ -12,3 +12,21 @@ agent-data/
 infra/.env
 eval/results/
 eval/audio/
+
+# Secrets / credentials — never commit
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.crt
+*.p12
+*.pfx
+secrets/
+
+# Local overrides with your real machine paths/apps (copy from the committed examples)
+*.local.json
+
+# Test/coverage artifacts
+htmlcov/
+coverage.xml
