@@ -23,6 +23,10 @@ class Settings:
     llm: str = field(default_factory=lambda: _env("VPC_LLM", "fake"))  # fake | ollama
     ollama_url: str = field(default_factory=lambda: _env("VPC_OLLAMA_URL", "http://127.0.0.1:11434"))
     ollama_model: str = field(default_factory=lambda: _env("VPC_OLLAMA_MODEL", "qwen2.5:3b"))
+    openai_url: str = field(default_factory=lambda: _env("VPC_OPENAI_URL", "http://127.0.0.1:10000"))
+    openai_model: str = field(default_factory=lambda: _env("VPC_OPENAI_MODEL", ""))
+    llm_timeout_s: float = field(default_factory=lambda: float(_env("VPC_LLM_TIMEOUT_S", "30")))
+    stt_device: str = field(default_factory=lambda: _env("VPC_STT_DEVICE", "cpu"))
     pc2: str = field(default_factory=lambda: _env("VPC_PC2", "fake"))  # fake | http
     pc2_url: str = field(default_factory=lambda: _env("VPC_PC2_URL", "https://pc2:8765"))
     pc2_secret: str = field(default_factory=lambda: _env("VPC_PC2_SECRET"))

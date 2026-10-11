@@ -45,6 +45,27 @@ async def test_request_shape_and_untrusted_label():
     assert any("UNTRUSTED" in m["content"] for m in seen["messages"] if m["role"] == "tool")
 
 
+async def test_openai_compat_adapter():
+    from app.adapters.openai_compat_llm import OpenAICompatLLM
+    seen = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen["path"] = request.url.path
+        seen.update(json.loads(request.content))
+        return httpx.Response(200, json={"choices": [{"message": {"tool_calls": [
+            {"id": "c1", "type": "function", "function": {"name": "open_app", "arguments": '{"app":"chrome"}'}}]}}]})
+
+    client = httpx.AsyncClient(transport=httpx.MockTransport(handler), base_url="http://llama")
+    ctx = PlanContext("Apps: chrome", [], observations=[{"tool": "t", "arguments": {}, "result": {}, "trusted": False}])
+    r = await OpenAICompatLLM(model="gemma", client=client).plan("เปิดโครม", ctx)
+    assert r.kind == "tool_call" and r.call.arguments == {"app": "chrome"}
+    assert seen["path"] == "/v1/chat/completions" and seen["model"] == "gemma"
+    assert all(m["role"] in ("system", "user", "assistant") for m in seen["messages"])
+    bad = httpx.AsyncClient(transport=httpx.MockTransport(lambda r: httpx.Response(200, json={})),
+                            base_url="http://llama")
+    assert (await OpenAICompatLLM(client=bad).plan("x", PlanContext("", []))).kind == "invalid"
+
+
 async def test_http_error_is_invalid():
     client = httpx.AsyncClient(transport=httpx.MockTransport(lambda r: httpx.Response(500)),
                                base_url="http://ollama")

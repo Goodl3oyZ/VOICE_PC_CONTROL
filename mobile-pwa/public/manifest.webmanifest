@@ -1,10 +1,36 @@
 {
   "name": "Voice PC Remote",
   "short_name": "VoicePC",
+  "description": "AI-powered voice control and remote execution for your PC",
   "start_url": "/",
+  "id": "/",
   "display": "standalone",
-  "background_color": "#111418",
-  "theme_color": "#111418",
+  "orientation": "any",
+  "background_color": "#0a0d14",
+  "theme_color": "#0a0d14",
   "lang": "th",
-  "icons": [{ "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }]
+  "categories": ["utilities", "productivity"],
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "สั่งการด้วยเสียง",
+      "short_name": "พูดคำสั่ง",
+      "description": "เปิดระบบรับคำสั่งเสียงทันที",
+      "url": "/#voice",
+      "icons": [{ "src": "/icon.svg", "sizes": "any" }]
+    }
+  ]
 }

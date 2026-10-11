@@ -1,6 +1,16 @@
 import { describe, expect, it } from "vitest";
 import type { Job } from "./api";
-import { describeCall, isActive, secondsLeft, upsertJob } from "./labels";
+import {
+  STATE_TH,
+  STATE_DESC_TH,
+  describeCall,
+  formatDuration,
+  formatTime,
+  isActive,
+  riskLabel,
+  secondsLeft,
+  upsertJob,
+} from "./labels";
 
 const job = (id: string, state: Job["state"] = "done") => ({ id, state }) as Job;
 
@@ -16,7 +26,16 @@ describe("labels", () => {
   });
 
   it("knows active vs terminal", () => {
+    expect(isActive(job("a", "created"))).toBe(true);
+    expect(isActive(job("a", "transcribing"))).toBe(true);
+    expect(isActive(job("a", "planning"))).toBe(true);
+    expect(isActive(job("a", "clarifying"))).toBe(true);
+    expect(isActive(job("a", "awaiting_confirm"))).toBe(true);
     expect(isActive(job("a", "running"))).toBe(true);
+    expect(isActive(job("a", "verifying"))).toBe(true);
+
+    expect(isActive(job("a", "done"))).toBe(false);
+    expect(isActive(job("a", "failed"))).toBe(false);
     expect(isActive(job("a", "cancelled"))).toBe(false);
   });
 
@@ -31,5 +50,48 @@ describe("labels", () => {
   it("counts down", () => {
     expect(secondsLeft(100, 40_000)).toBe(60);
     expect(secondsLeft(10, 40_000)).toBe(0);
+    expect(secondsLeft(0, 10_000)).toBe(0);
+  });
+
+  it("formats durations accurately", () => {
+    expect(formatDuration(undefined)).toBe("");
+    expect(formatDuration(450)).toBe("450 ms");
+    expect(formatDuration(1200)).toBe("1.20 วินาที");
+    expect(formatDuration(3500)).toBe("3.50 วินาที");
+  });
+
+  it("formats timestamps cleanly", () => {
+    const formatted = formatTime(1700000000);
+    expect(typeof formatted).toBe("string");
+    expect(formatted.length).toBeGreaterThan(0);
+  });
+
+  it("maps all states to descriptions and Thai titles", () => {
+    const states: Job["state"][] = [
+      "created",
+      "transcribing",
+      "planning",
+      "clarifying",
+      "routing",
+      "awaiting_confirm",
+      "dispatching",
+      "running",
+      "verifying",
+      "done",
+      "failed",
+      "cancelled",
+    ];
+
+    for (const s of states) {
+      expect(STATE_TH[s]).toBeDefined();
+      expect(STATE_DESC_TH[s]).toBeDefined();
+    }
+  });
+
+  it("formats risk levels accurately", () => {
+    expect(riskLabel(0)).toContain("ระดับ 0");
+    expect(riskLabel(1)).toContain("ระดับ 1");
+    expect(riskLabel(4)).toContain("ระดับ 4");
+    expect(riskLabel(99)).toContain("ระดับความเสี่ยงที่ 99");
   });
 });

@@ -111,9 +111,10 @@ async def evaluate(cases: list[dict], llm, kb: Knowledge, stt=None) -> dict:
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--set", default="dev")
-    ap.add_argument("--llm", choices=["fake", "ollama"], default="fake")
+    ap.add_argument("--llm", choices=["fake", "ollama", "openai"], default="fake")
     ap.add_argument("--model", default="qwen2.5:3b")
     ap.add_argument("--ollama-url", default="http://127.0.0.1:11434")
+    ap.add_argument("--openai-url", default="http://127.0.0.1:10000")
     ap.add_argument("--stt", choices=["none", "faster_whisper"], default="none")
     ap.add_argument("--whisper-model", default="small")
     ap.add_argument("--min-tool-acc", type=float, default=0.0)
@@ -126,6 +127,9 @@ def main(argv: list[str] | None = None) -> int:
     if a.llm == "ollama":
         from app.adapters.ollama_llm import OllamaLLM
         llm = OllamaLLM(a.ollama_url, a.model, timeout=60)
+    elif a.llm == "openai":
+        from app.adapters.openai_compat_llm import OpenAICompatLLM
+        llm = OpenAICompatLLM(a.openai_url, a.model, timeout=300)
     else:
         llm = ScriptedLLM()
     stt = None

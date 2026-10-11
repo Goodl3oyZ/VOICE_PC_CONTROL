@@ -26,6 +26,7 @@ secrets/
 
 # Local overrides with your real machine paths/apps (copy from the committed examples)
 *.local.json
+*.live.json
 
 # Test/coverage artifacts
 htmlcov/

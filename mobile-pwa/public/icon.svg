@@ -1,1 +1,43 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><rect width="512" height="512" rx="96" fill="#111418"/><rect x="206" y="96" width="100" height="200" rx="50" fill="#4f9dff"/><path d="M156 246a100 100 0 0 0 200 0" fill="none" stroke="#4f9dff" stroke-width="28" stroke-linecap="round"/><path d="M256 346v70M196 416h120" stroke="#4f9dff" stroke-width="28" stroke-linecap="round"/></svg>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#141a29" />
+      <stop offset="100%" stop-color="#070a10" />
+    </linearGradient>
+    <linearGradient id="cyanViolet" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#06b6d4" />
+      <stop offset="60%" stop-color="#3b82f6" />
+      <stop offset="100%" stop-color="#8b5cf6" />
+    </linearGradient>
+    <linearGradient id="glow" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#06b6d4" stop-opacity="0.6" />
+      <stop offset="100%" stop-color="#8b5cf6" stop-opacity="0" />
+    </linearGradient>
+  </defs>
+
+  <!-- Background Squircle with safe margin for maskable icon -->
+  <rect width="512" height="512" rx="128" fill="url(#bg)" />
+  <rect x="6" y="6" width="500" height="500" rx="124" fill="none" stroke="url(#cyanViolet)" stroke-width="6" stroke-opacity="0.3" />
+
+  <!-- Ambient Glow Ring -->
+  <circle cx="256" cy="230" r="140" fill="url(#glow)" />
+
+  <!-- Outer Sonic Wave Arcs -->
+  <path d="M120 200 A 150 150 0 0 0 120 260" fill="none" stroke="#06b6d4" stroke-width="14" stroke-linecap="round" stroke-opacity="0.4" />
+  <path d="M392 200 A 150 150 0 0 1 392 260" fill="none" stroke="#8b5cf6" stroke-width="14" stroke-linecap="round" stroke-opacity="0.4" />
+
+  <!-- Mid Sonic Wave Arcs -->
+  <path d="M145 180 A 125 125 0 0 0 145 280" fill="none" stroke="#06b6d4" stroke-width="16" stroke-linecap="round" stroke-opacity="0.75" />
+  <path d="M367 180 A 125 125 0 0 1 367 280" fill="none" stroke="#8b5cf6" stroke-width="16" stroke-linecap="round" stroke-opacity="0.75" />
+
+  <!-- Center Microphone Capsule -->
+  <rect x="211" y="115" width="90" height="180" rx="45" fill="url(#cyanViolet)" />
+  
+  <!-- Microphone Stand / Pickup Arc -->
+  <path d="M176 240 A 80 80 0 0 0 336 240" fill="none" stroke="url(#cyanViolet)" stroke-width="24" stroke-linecap="round" />
+  <line x1="256" y1="320" x2="256" y2="390" stroke="url(#cyanViolet)" stroke-width="24" stroke-linecap="round" />
+  <line x1="200" y1="390" x2="312" y2="390" stroke="url(#cyanViolet)" stroke-width="24" stroke-linecap="round" />
+
+  <!-- Subtle AI Sparkle Core -->
+  <circle cx="256" cy="170" r="12" fill="#ffffff" />
+</svg>

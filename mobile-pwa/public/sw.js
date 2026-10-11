@@ -1,30 +1,58 @@
-// Minimal service worker: caches the app shell only. API calls and events are never cached.
-const CACHE = "voicepc-shell-v1";
-const SHELL = ["/", "/index.html", "/manifest.webmanifest", "/icon.svg"];
-const API = ["/command", "/jobs", "/confirm", "/stop", "/status", "/events", "/health"];
+// Voice PC Remote — PWA Service Worker
+// Strictly caches the application shell only.
+// API calls, WebSocket streams, tokens, and remote execution data are NEVER cached (§6).
 
-self.addEventListener("install", (e) => {
-  e.waitUntil(caches.open(CACHE).then((c) => c.addAll(SHELL)));
+const CACHE_NAME = "voicepc-shell-v2";
+const SHELL_ASSETS = ["/", "/index.html", "/manifest.webmanifest", "/icon.svg"];
+const NETWORK_ONLY_PREFIXES = ["/command", "/jobs", "/confirm", "/stop", "/status", "/events", "/health"];
+
+self.addEventListener("install", (event) => {
+  event.waitUntil(
+    caches.open(CACHE_NAME).then((cache) => cache.addAll(SHELL_ASSETS)).catch(() => {})
+  );
   self.skipWaiting();
 });
 
-self.addEventListener("activate", (e) => {
-  e.waitUntil(caches.keys().then((keys) => Promise.all(keys.filter((k) => k !== CACHE).map((k) => caches.delete(k)))));
+self.addEventListener("activate", (event) => {
+  event.waitUntil(
+    caches
+      .keys()
+      .then((keys) => Promise.all(keys.filter((k) => k !== CACHE_NAME).map((k) => caches.delete(k))))
+  );
   self.clients.claim();
 });
 
-self.addEventListener("fetch", (e) => {
-  const url = new URL(e.request.url);
-  if (e.request.method !== "GET" || url.origin !== location.origin || API.some((p) => url.pathname.startsWith(p))) {
-    return; // network only
+self.addEventListener("fetch", (event) => {
+  const url = new URL(event.request.url);
+
+  // Strictly skip non-GET requests, third-party requests, and all PC1 API endpoints
+  if (
+    event.request.method !== "GET" ||
+    url.origin !== location.origin ||
+    NETWORK_ONLY_PREFIXES.some((prefix) => url.pathname.startsWith(prefix))
+  ) {
+    return; // Pass straight to network
   }
-  e.respondWith(
-    fetch(e.request)
-      .then((res) => {
-        const copy = res.clone();
-        caches.open(CACHE).then((c) => c.put(e.request, copy));
-        return res;
+
+  // Stale-while-revalidate / Network-fallback for App Shell static assets
+  event.respondWith(
+    fetch(event.request)
+      .then((networkResponse) => {
+        if (networkResponse && networkResponse.status === 200 && networkResponse.type === "basic") {
+          const responseToCache = networkResponse.clone();
+          caches.open(CACHE_NAME).then((cache) => {
+            cache.put(event.request, responseToCache);
+          });
+        }
+        return networkResponse;
       })
-      .catch(() => caches.match(e.request).then((r) => r || caches.match("/index.html"))),
+      .catch(async () => {
+        const cached = await caches.match(event.request);
+        if (cached) return cached;
+        if (event.request.mode === "navigate") {
+          return caches.match("/index.html");
+        }
+        return new Response("Offline", { status: 503, statusText: "Offline" });
+      })
   );
 });
