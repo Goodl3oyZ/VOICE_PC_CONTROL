@@ -4,6 +4,7 @@
   python -m app.cli revoke-device phone1
   python -m app.cli list-devices
   python -m app.cli verify-audit
+  python -m app.cli set-pairing-key          # new Secret Key for pairing browsers (printed once)
 """
 from __future__ import annotations
 
@@ -21,6 +22,7 @@ def main(argv: list[str] | None = None) -> int:
     sub.add_parser("revoke-device").add_argument("name")
     sub.add_parser("list-devices")
     sub.add_parser("verify-audit")
+    sub.add_parser("set-pairing-key")
     a = p.parse_args(argv)
     store = SqliteStore(Settings().db_path)
 
@@ -34,6 +36,12 @@ def main(argv: list[str] | None = None) -> int:
     elif a.cmd == "list-devices":
         for d in store.list_devices():
             print(f"{d['name']}\t{'revoked' if d['revoked_at'] else 'active'}")
+    elif a.cmd == "set-pairing-key":
+        from .api.webauth import PAIRING_KEY_SETTING, hash_key, new_pairing_key
+        key = new_pairing_key()
+        store.set_setting(PAIRING_KEY_SETTING, hash_key(key))
+        print(key)
+        print("(shown once; old key no longer works for NEW devices, paired devices stay paired)", file=sys.stderr)
     elif a.cmd == "verify-audit":
         ok = store.verify_audit()
         print("audit chain OK" if ok else "AUDIT CHAIN BROKEN")

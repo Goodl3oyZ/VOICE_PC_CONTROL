@@ -11,6 +11,22 @@ Legend: `[x]` done and covered by an automated test · `[~]` code exists but nee
 - Live smoke test on this Windows machine: real PC2 agent + real PC1 server → heartbeat online, Thai command `สถานะเครื่อง` → `done` in 112 ms through HMAC; unsigned PC2 call → 401; no-token PC1 call → 401; audit chain verified. (Only read-only `get_status` was exercised — no app was launched.)
 - Eval baseline (rules only, no LLM): tool accuracy 70 %, refusal 100 %, dangerous executed 0, clarify 0 % → the remaining cases need the real local LLM (Spike SP-2).
 
+## Live deployment (2026-10-11)
+- [x] PC1 = LXC 102 `ai-lxc` (Proxmox, GTX 1650 SUPER 4 GB): systemd `voice-pc-control`, venv in `/opt/voice-pc-control`, secrets in `/etc/voice-pc-control.env`, admin via `vpc-cli`
+- [x] LLM = **Ollama 0.34.4** (`docker-compose.yml` at repo root) with **`gemma4-e2b-qat`** — benchmark winner, LLM p50 0.43 s / p95 0.82 s (ADR-0002); llama.cpp stopped
+- [x] **Open WebUI v0.11.4** at `https://chat.<domain>` (Cloudflare tunnel; Tailscale route removed) — Google + GitHub OAuth, new users pending approval
+- [x] STT = faster-whisper `small` int8 on CPU
+- [x] ~~HTTPS via `tailscale serve`~~ → replaced by **public access at `https://pc.flukelnwza.online`** (ADR-0003): Cloudflare tunnel, Google OAuth (allowlisted email) + one-time Secret Key per device, CSRF + WebSocket origin checks, bearer disabled
+- [x] PC2 agent dials **out** to `wss://pc.flukelnwza.online/agent/ws` (HMAC challenge); no open port, no VPN — verified connected
+- [x] Public checks: anonymous/fake-token API calls → 401; Google login uses PKCE; 154 tests incl. real-socket relay E2E
+- [ ] Add `https://pc.flukelnwza.online/auth/google/callback` to the Google OAuth client (user action), create Secret Key, first phone login
+- [x] PC2 = this notebook: agent (now outbound to PC1, see below), secret in Credential Manager, auto-start task "VoicePC Agent"
+- [x] Real network E2E: status 493 ms, open Notepad 872 ms (TC-F03), repeat → "already open" (TC-F04), calculator via URI, regedit + evil-site refused, no-token 401, audit chain OK
+- [x] HTTPS E2E from PC2: shortcut 1.3 s; LLM commands (intent → Notepad/Calculator) 6–30 s incl. first load; ambiguous → asks back; dangerous → refused
+- [ ] Phone test (mic over HTTPS, hold-to-talk, Stop) — TC-F01/F02/F08
+- [ ] OAuth redirect URIs registered in Google/GitHub consoles (user action)
+- [ ] Clarify rate 75 % → 80 % (few-shot prompt)
+
 ## Current target: Sprint 0 + Phase 1 (MVP, S1–S3, Gate G1)
 
 Everything is built behind Ports & Adapters, so the full pipeline runs and is tested

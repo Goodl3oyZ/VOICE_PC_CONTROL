@@ -1,0 +1,91 @@
+# PC1 AI stack (run from the repo root):  docker compose --env-file .env up -d
+#   ollama      local LLM runtime on the GPU (GTX 1650 SUPER 4 GB) — also used by the voice orchestrator
+#   open-webui  chat UI with Google/GitHub OAuth, behind `tailscale serve` HTTPS
+#   orchestrator (profile "orchestrator") — optional container for the voice pipeline;
+#                on ai-lxc it currently runs as the systemd service `voice-pc-control` instead.
+# Secrets live only in .env (gitignored). Copy .env.example -> .env and fill it.
+services:
+  ollama:
+    image: ollama/ollama:0.34.4
+    container_name: ollama
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:11434:11434"   # localhost only: orchestrator (systemd) + open-webui
+    environment:
+      # Measured on GTX 1650 SUPER: gemma4-e2b-qat at 16k ctx = 2.8 GB VRAM, 100% GPU (ADR-0002).
+      # Open WebUI chats need > 4k (5.5k-token requests seen). Clients must not override num_ctx (reload).
+      OLLAMA_CONTEXT_LENGTH: "16384"
+      OLLAMA_FLASH_ATTENTION: "1"
+      OLLAMA_KV_CACHE_TYPE: q8_0        # halves KV-cache VRAM
+      OLLAMA_KEEP_ALIVE: 30m            # keep-warm (§14.5)
+      OLLAMA_MAX_LOADED_MODELS: "1"
+      # 2 slots: a voice command must not queue behind a long Open WebUI answer (seen: 7–30 s waits).
+      # gemma4 KV cache is ~57 MB per 16k slot, so this still fits the 4 GB card fully.
+      OLLAMA_NUM_PARALLEL: "2"
+    volumes:
+      - ollama:/root/.ollama
+    deploy:
+      resources:
+        reservations:
+          devices: [{ driver: nvidia, count: 1, capabilities: [gpu] }]
+    healthcheck:
+      test: ["CMD", "ollama", "list"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  open-webui:
+    image: ghcr.io/open-webui/open-webui:v0.11.4
+    container_name: open-webui
+    restart: unless-stopped
+    depends_on: [ollama]
+    ports:
+      - "127.0.0.1:8080:8080"     # published over HTTPS by `tailscale serve --https=8443`
+    environment:
+      OLLAMA_BASE_URL: http://ollama:11434
+      DEFAULT_MODELS: ${DEFAULT_MODEL:-gemma4-e2b-qat}   # benchmark winner, see docs/adr/0002
+      TASK_MODEL: ${DEFAULT_MODEL:-gemma4-e2b-qat}       # titles/tags/follow-ups use the same loaded model
+      WEBUI_URL: ${WEBUI_URL:?set WEBUI_URL}
+      WEBUI_SECRET_KEY: ${WEBUI_SECRET_KEY:?set WEBUI_SECRET_KEY}
+      # --- OAuth (Google + GitHub; Facebook is not supported by Open WebUI) ---
+      ENABLE_OAUTH_SIGNUP: "true"
+      OAUTH_MERGE_ACCOUNTS_BY_EMAIL: "true"
+      DEFAULT_USER_ROLE: pending        # new OAuth users wait for admin approval
+      ENABLE_LOGIN_FORM: ${ENABLE_LOGIN_FORM:-true}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
+      GOOGLE_REDIRECT_URI: ${WEBUI_URL}/oauth/google/callback
+      GITHUB_CLIENT_ID: ${GITHUB_CLIENT_ID:-}
+      GITHUB_CLIENT_SECRET: ${GITHUB_CLIENT_SECRET:-}
+      GITHUB_CLIENT_REDIRECT_URI: ${WEBUI_URL}/oauth/github/callback
+      # --- privacy (local-first) ---
+      ENABLE_COMMUNITY_SHARING: "false"
+      ANONYMIZED_TELEMETRY: "false"
+      SCARF_NO_ANALYTICS: "true"
+      DO_NOT_TRACK: "true"
+    volumes:
+      - open-webui:/app/backend/data
+
+  orchestrator:
+    profiles: ["orchestrator"]
+    build: { context: ., dockerfile: infra/Dockerfile.pc1 }
+    restart: unless-stopped
+    depends_on: [ollama]
+    ports:
+      - "127.0.0.1:8000:8000"
+    environment:
+      VPC_STT: faster_whisper
+      VPC_STT_DEVICE: cpu
+      VPC_LLM: ollama
+      VPC_OLLAMA_URL: http://ollama:11434
+      VPC_OLLAMA_MODEL: ${VPC_OLLAMA_MODEL:-gemma4-e2b-qat}
+      VPC_PC2: http
+      VPC_PC2_URL: ${VPC_PC2_URL:-}
+      VPC_PC2_SECRET: ${VPC_PC2_SECRET:-}
+    volumes:
+      - pc1-data:/data
+
+volumes:
+  ollama:
+  open-webui:
+  pc1-data:

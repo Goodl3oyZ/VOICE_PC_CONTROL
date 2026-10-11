@@ -2195,3 +2195,7 @@ code, pre {
     transition-duration: 0.01ms !important;
   }
 }
+
+/* Google sign-in is a link styled as the primary button */
+a.btn-setup-submit { text-decoration: none; display: flex; }
+

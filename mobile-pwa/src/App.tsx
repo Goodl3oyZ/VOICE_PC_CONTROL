@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Api, ApiError, type Job, type ServerEvent } from "./api";
+import { Api, ApiError, type AuthState, type Job, type ServerEvent } from "./api";
 import { isActive, upsertJob } from "./labels";
 import { useRecorder } from "./useRecorder";
 
@@ -9,21 +9,12 @@ import { CommandInput } from "./components/CommandInput";
 import { ActiveJobCard } from "./components/ActiveJobCard";
 import { PCStatusPanel } from "./components/PCStatusPanel";
 import { CommandHistory } from "./components/CommandHistory";
-import { TokenSetup } from "./components/TokenSetup";
-import { TokenModal } from "./components/TokenModal";
+import { LoginScreen, PairScreen } from "./components/AuthGate";
+import { SessionModal } from "./components/SessionModal";
 import { OfflineBanner } from "./components/OfflineBanner";
 import { InstallPrompt } from "./components/InstallPrompt";
 
-const TOKEN_KEY = "voicepc.token";
 const THEME_KEY = "voicepc.theme";
-
-function readToken(): string {
-  try {
-    return localStorage.getItem(TOKEN_KEY) ?? "";
-  } catch {
-    return "";
-  }
-}
 
 function readTheme(): "dark" | "light" {
   try {
@@ -36,7 +27,9 @@ function readTheme(): "dark" | "light" {
 }
 
 export default function App() {
-  const [token, setToken] = useState(readToken);
+  const api = useMemo(() => new Api(), []);
+  const [auth, setAuth] = useState<AuthState | null>(null);
+  const [authError, setAuthError] = useState<string | null>(null);
   const [theme, setTheme] = useState<"dark" | "light">(readTheme);
 
   // Synchronize data-theme on document root
@@ -53,42 +46,82 @@ export default function App() {
     setTheme((prev) => (prev === "dark" ? "light" : "dark"));
   }, []);
 
-  if (!token) {
+  const refreshAuth = useCallback(() => {
+    api
+      .me()
+      .then((a) => {
+        setAuth(a);
+        setAuthError(null);
+      })
+      .catch((e: unknown) => setAuthError(e instanceof Error ? e.message : String(e)));
+  }, [api]);
+
+  useEffect(refreshAuth, [refreshAuth]);
+
+  const logout = useCallback(() => {
+    api.logout().finally(refreshAuth);
+  }, [api, refreshAuth]);
+
+  const unpair = useCallback(() => {
+    api.unpair().finally(refreshAuth);
+  }, [api, refreshAuth]);
+
+  if (!auth) {
     return (
       <div className="app-root theme-container">
-        <TokenSetup onSave={setToken} />
+        <div className="setup-container">
+          <div className="setup-card">
+            <p className="setup-subtitle">{authError ? `ติดต่อเซิร์ฟเวอร์ไม่ได้: ${authError}` : "กำลังตรวจสอบการเข้าสู่ระบบ…"}</p>
+            {authError && (
+              <button type="button" className="btn-setup-submit" onClick={refreshAuth}>
+                <span>ลองใหม่</span>
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (!auth.authenticated) {
+    return (
+      <div className="app-root theme-container">
+        <LoginScreen auth={auth} />
+      </div>
+    );
+  }
+
+  if (!auth.paired) {
+    return (
+      <div className="app-root theme-container">
+        <PairScreen api={api} auth={auth} onPaired={refreshAuth} onSignOut={logout} />
       </div>
     );
   }
 
   return (
     <Remote
-      token={token}
+      api={api}
+      email={auth.email}
       theme={theme}
       onToggleTheme={toggleTheme}
-      onLogout={() => {
-        try {
-          localStorage.removeItem(TOKEN_KEY);
-        } catch {
-          /* ignore */
-        }
-        setToken("");
-      }}
-      onUpdateToken={(newToken) => setToken(newToken)}
+      onSessionLost={refreshAuth}
+      onLogout={logout}
+      onUnpair={unpair}
     />
   );
 }
-
 interface RemoteProps {
-  token: string;
+  api: Api;
+  email: string | null;
   theme: "dark" | "light";
   onToggleTheme: () => void;
+  onSessionLost: () => void;
   onLogout: () => void;
-  onUpdateToken: (t: string) => void;
+  onUnpair: () => void;
 }
 
-function Remote({ token, theme, onToggleTheme, onLogout, onUpdateToken }: RemoteProps) {
-  const api = useMemo(() => new Api(token), [token]);
+function Remote({ api, email, theme, onToggleTheme, onSessionLost, onLogout, onUnpair }: RemoteProps) {
   const [jobs, setJobs] = useState<Job[]>([]);
   const [pc2Online, setPc2Online] = useState<boolean | null>(null);
   const [pc2Data, setPc2Data] = useState<Record<string, unknown> | null>(null);
@@ -101,17 +134,12 @@ function Remote({ token, theme, onToggleTheme, onLogout, onUpdateToken }: Remote
   const handleError = useCallback(
     (e: unknown) => {
       if (e instanceof ApiError && e.status === 401) {
-        try {
-          localStorage.removeItem(TOKEN_KEY);
-        } catch {
-          /* ignore */
-        }
-        onLogout();
+        onSessionLost(); // session expired or device revoked: back to Google / Secret Key screens
         return;
       }
       setError(e instanceof Error ? e.message : String(e));
     },
-    [onLogout],
+    [onSessionLost],
   );
 
   const refresh = useCallback(() => {
@@ -156,7 +184,7 @@ function Remote({ token, theme, onToggleTheme, onLogout, onUpdateToken }: Remote
         setWsUp(false);
         if (closed) return;
         if (e.code === 4401) {
-          return handleError(new ApiError(401, "Token rejected by server"));
+          return handleError(new ApiError(401, "Session rejected by server"));
         }
         timer = window.setTimeout(connect, Math.min(10_000, 500 * 2 ** retry++));
       };
@@ -292,13 +320,13 @@ function Remote({ token, theme, onToggleTheme, onLogout, onUpdateToken }: Remote
         </div>
       </main>
 
-      {/* Token / Settings Modal */}
-      <TokenModal
+      {/* Account / Device Modal */}
+      <SessionModal
         isOpen={isSettingsOpen}
-        currentToken={token}
+        email={email}
         onClose={() => setIsSettingsOpen(false)}
-        onUpdateToken={onUpdateToken}
         onLogout={onLogout}
+        onUnpair={onUnpair}
       />
     </div>
   );

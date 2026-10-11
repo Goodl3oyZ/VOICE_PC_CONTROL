@@ -1,5 +1,6 @@
 {
-  "_comment": "PC2 allowlist. Paths are examples — adjust to this notebook. Every app here must also be in pc1-orchestrator/data/knowledge.json.",
+  "_comment": "Example PC2 config. Copy to agent_config.local.json (gitignored) and adjust. Every app must also be in the PC1 knowledge file. With pc1_ws_url set the agent dials OUT to PC1 and opens no port (bind_host/port/allowed_clients are then unused).",
+  "pc1_ws_url": "wss://pc.example.com/agent/ws",
   "apps": {
     "chrome": {"process": "chrome.exe", "argv": ["%ProgramFiles%\\Google\\Chrome\\Application\\chrome.exe"]},
     "notepad": {"process": "notepad.exe", "argv": ["notepad.exe"]},

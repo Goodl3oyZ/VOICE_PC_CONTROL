@@ -29,9 +29,12 @@ Rules:
 
 class OllamaLLM:
     def __init__(self, base_url: str = "http://127.0.0.1:11434", model: str = "qwen2.5:3b",
-                 keep_alive: str = "30m", timeout: float = 30.0, num_ctx: int = 4096,
-                 client: httpx.AsyncClient | None = None):
+                 keep_alive: str = "30m", timeout: float = 30.0, num_ctx: int | None = None,
+                 think: bool | None = False, client: httpx.AsyncClient | None = None):
         self.model, self.keep_alive, self.num_ctx = model, keep_alive, num_ctx
+        # Thinking models (Qwen3.5) spend seconds reasoning before a tool call; routing doesn't need it.
+        # None = don't send the flag (for models/servers that reject it).
+        self.think = think
         self._client = client or httpx.AsyncClient(base_url=base_url, timeout=timeout)
 
     def _messages(self, text: str, ctx: PlanContext) -> list[dict[str, Any]]:
@@ -50,9 +53,18 @@ class OllamaLLM:
     async def plan(self, text: str, ctx: PlanContext) -> PlanResult:
         body = {"model": self.model, "messages": self._messages(text, ctx), "tools": ctx.tools,
                 "stream": False, "keep_alive": self.keep_alive,
-                "options": {"temperature": 0, "num_ctx": self.num_ctx, "num_predict": 256}}
+                "options": {"temperature": 0, "num_predict": 256}}
+        # Default None = use the server's OLLAMA_CONTEXT_LENGTH. A different num_ctx than other clients
+        # (e.g. Open WebUI) forces Ollama to reload the model (~25 s on this GPU).
+        if self.num_ctx:
+            body["options"]["num_ctx"] = self.num_ctx
+        if self.think is not None:
+            body["think"] = self.think
         try:
             r = await self._client.post("/api/chat", json=body)
+            if r.status_code == 400 and "think" in r.text and "think" in body:
+                body.pop("think")  # model has no thinking mode: retry without the flag
+                r = await self._client.post("/api/chat", json=body)
             r.raise_for_status()
             msg = r.json().get("message") or {}
         except (httpx.HTTPError, ValueError) as e:

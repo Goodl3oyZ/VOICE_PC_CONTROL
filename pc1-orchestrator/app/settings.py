@@ -27,7 +27,14 @@ class Settings:
     openai_model: str = field(default_factory=lambda: _env("VPC_OPENAI_MODEL", ""))
     llm_timeout_s: float = field(default_factory=lambda: float(_env("VPC_LLM_TIMEOUT_S", "30")))
     stt_device: str = field(default_factory=lambda: _env("VPC_STT_DEVICE", "cpu"))
-    pc2: str = field(default_factory=lambda: _env("VPC_PC2", "fake"))  # fake | http
+    # --- public web access (Cloudflare tunnel): Google login + paired-device cookie ---
+    public_url: str = field(default_factory=lambda: _env("VPC_PUBLIC_URL"))  # e.g. https://pc.example.com
+    session_secret: str = field(default_factory=lambda: _env("VPC_SESSION_SECRET"))
+    google_client_id: str = field(default_factory=lambda: _env("VPC_GOOGLE_CLIENT_ID"))
+    google_client_secret: str = field(default_factory=lambda: _env("VPC_GOOGLE_CLIENT_SECRET"))
+    allowed_emails: str = field(default_factory=lambda: _env("VPC_ALLOWED_EMAILS"))  # comma separated
+    allow_bearer: bool = field(default_factory=lambda: _env("VPC_ALLOW_BEARER", "true").lower() == "true")
+    pc2: str = field(default_factory=lambda: _env("VPC_PC2", "fake"))  # fake | http | relay
     pc2_url: str = field(default_factory=lambda: _env("VPC_PC2_URL", "https://pc2:8765"))
     pc2_secret: str = field(default_factory=lambda: _env("VPC_PC2_SECRET"))
     pc2_ca: str = field(default_factory=lambda: _env("VPC_PC2_CA"))  # CA bundle path for PC2 TLS

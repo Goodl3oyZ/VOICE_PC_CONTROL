@@ -1,4 +1,7 @@
-"""PC1 -> PC2 client: HMAC-signed HTTPS calls with idempotency keys (doc §14.4(d), §14.7)."""
+"""PC1 -> PC2 client: HMAC-signed calls with idempotency keys (doc §14.4(d), §14.7).
+
+The transport is pluggable: plain HTTP(S) here, or the agent's reverse WebSocket (agent_hub.PC2RelayTools).
+"""
 from __future__ import annotations
 
 import json
@@ -18,6 +21,16 @@ class PC2HttpTools:
         self._secret = secret
         self._client = client or httpx.AsyncClient(base_url=base_url, timeout=timeout, verify=verify)
 
+    async def _send(self, method: str, path: str, body: bytes, headers: dict[str, str]) -> tuple[int, Any]:
+        try:
+            r = await self._client.request(method, path, content=body, headers=headers)
+        except httpx.HTTPError as e:
+            raise PC2Unavailable(type(e).__name__) from e
+        try:
+            return r.status_code, r.json()
+        except ValueError:
+            return r.status_code, None
+
     async def _request(self, method: str, path: str, payload: dict[str, Any] | None = None,
                        idempotency_key: str | None = None,
                        extra_headers: dict[str, str] | None = None) -> ToolResult:
@@ -25,18 +38,15 @@ class PC2HttpTools:
         headers = signed_headers(self._secret, method, path, body, idempotency_key=idempotency_key)
         headers["Content-Type"] = "application/json"
         headers.update(extra_headers or {})
+        status, data = await self._send(method, path, body, headers)
+        if status in (401, 403):
+            return ToolResult(ok=False, error=f"PC2 ปฏิเสธคำขอ ({status})")
+        if status >= 500:
+            raise PC2Unavailable(f"HTTP {status}")
         try:
-            r = await self._client.request(method, path, content=body, headers=headers)
-        except httpx.HTTPError as e:
-            raise PC2Unavailable(type(e).__name__) from e
-        if r.status_code in (401, 403):
-            return ToolResult(ok=False, error=f"PC2 ปฏิเสธคำขอ ({r.status_code})")
-        if r.status_code >= 500:
-            raise PC2Unavailable(f"HTTP {r.status_code}")
-        try:
-            return ToolResult.model_validate(r.json())
+            return ToolResult.model_validate(data)
         except ValueError:
-            return ToolResult(ok=False, error=f"PC2 ตอบกลับผิดรูปแบบ (HTTP {r.status_code})")
+            return ToolResult(ok=False, error=f"PC2 ตอบกลับผิดรูปแบบ (HTTP {status})")
 
     async def call(self, tool: str, arguments: dict[str, Any], idempotency_key: str,
                    approved_hash: str | None = None) -> ToolResult:

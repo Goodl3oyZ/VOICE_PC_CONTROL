@@ -16,9 +16,11 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 from starlette.websockets import WebSocketDisconnect
 
+from ..adapters.agent_hub import AgentHub
 from ..adapters.notify import Broadcaster
 from ..adapters.sqlite_store import SqliteStore
 from ..core.orchestrator import Conflict, NotFound, Orchestrator
+from .webauth import WebAuth
 
 log = logging.getLogger("pc1.api")
 MAX_AUDIO_BYTES = 10 * 1024 * 1024
@@ -28,7 +30,8 @@ SECURITY_HEADERS = {
     "X-Frame-Options": "DENY",
     "Permissions-Policy": "microphone=(self), camera=(), geolocation=()",
     "Content-Security-Policy": ("default-src 'self'; connect-src 'self' ws: wss:; media-src 'self' blob:; "
-                                "img-src 'self' data:; style-src 'self' 'unsafe-inline'; "
+                                "img-src 'self' data:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
+                                "font-src 'self' https://fonts.gstatic.com; form-action 'self'; "
                                 "frame-ancestors 'none'; base-uri 'none'"),
 }
 
@@ -47,7 +50,11 @@ class ConfirmIn(BaseModel):
 
 
 def create_app(orch: Orchestrator, store: SqliteStore, broadcaster: Broadcaster,
-               static_dir: str | Path | None = None, heartbeat_interval: float | None = None) -> FastAPI:
+               static_dir: str | Path | None = None, heartbeat_interval: float | None = None,
+               webauth: WebAuth | None = None, hub: AgentHub | None = None,
+               allow_bearer: bool = True) -> FastAPI:
+    """allow_bearer: device tokens in an Authorization header (CLI/tests). Disable in public deployments,
+    so the browser path (Google session + paired-device cookie) is the only way in."""
 
     @contextlib.asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
@@ -80,14 +87,20 @@ def create_app(orch: Orchestrator, store: SqliteStore, broadcaster: Broadcaster,
         return JSONResponse({"detail": "job not found"}, status_code=404)
 
     def device(request: Request) -> str:
-        auth = request.headers.get("authorization", "")
-        scheme, _, token = auth.partition(" ")
-        name = store.check_token(token.strip()) if scheme.lower() == "bearer" else None
+        name = None
+        scheme, _, token = request.headers.get("authorization", "").partition(" ")
+        if allow_bearer and scheme.lower() == "bearer":
+            name = store.check_token(token.strip())
+        elif webauth is not None:
+            name = webauth.authorize(request, mutating=request.method not in ("GET", "HEAD"))
         if name is None:
-            raise HTTPException(401, "invalid or missing token", headers={"WWW-Authenticate": "Bearer"})
+            raise HTTPException(401, "not authorised")
         return name
 
     Device = Annotated[str, Depends(device)]
+
+    if webauth is not None:
+        app.include_router(webauth.router())
 
     @app.get("/health")
     async def health() -> dict[str, Any]:
@@ -144,12 +157,15 @@ def create_app(orch: Orchestrator, store: SqliteStore, broadcaster: Broadcaster,
     @app.get("/status")
     async def status(_: Device) -> dict[str, Any]:
         return {"pc2_online": orch.pc2_online, "pc2_last_seen": orch.pc2_last_seen,
-                "pc2": orch.pc2_status, "heartbeat": bool(heartbeat_interval)}
+                "pc2": orch.pc2_status, "heartbeat": bool(heartbeat_interval),
+                "agent_connected": hub.connected if hub else None}
 
     @app.websocket("/events")
     async def events(ws: WebSocket, token: str = "") -> None:
-        # Browsers can't set headers on WebSocket, so the token comes as a query param (HTTPS/VPN only).
-        if store.check_token(token) is None:
+        # Browser: session + device cookies (Origin checked). CLI/tests: ?token= when bearer is allowed.
+        ok = (allow_bearer and token and store.check_token(token)) or \
+            (webauth is not None and webauth.authorize_ws(ws.headers, ws.cookies))
+        if not ok:
             await ws.close(code=4401)
             return
         await ws.accept()
@@ -162,6 +178,14 @@ def create_app(orch: Orchestrator, store: SqliteStore, broadcaster: Broadcaster,
             pass
         finally:
             broadcaster.unsubscribe(q)
+
+    @app.websocket("/agent/ws")
+    async def agent_ws(ws: WebSocket) -> None:
+        # PC2 dials out to here; authenticated by an HMAC challenge inside AgentHub, not by cookies.
+        if hub is None:
+            await ws.close(code=4404)
+            return
+        await hub.attach(ws)
 
     if static_dir and Path(static_dir).is_dir():
         app.mount("/", StaticFiles(directory=str(static_dir), html=True), name="pwa")

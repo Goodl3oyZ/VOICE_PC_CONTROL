@@ -26,6 +26,8 @@ class AgentConfig:
     verify_timeout_s: float = 8.0
     tool_timeout_s: float = 15.0
     data_dir: str = "agent-data"
+    # Outbound mode: dial PC1 (e.g. wss://pc.example.com/agent/ws) instead of listening for PC1.
+    pc1_ws_url: str | None = None
     bind_host: str = "127.0.0.1"
     port: int = 8765
     tls_certfile: str | None = None

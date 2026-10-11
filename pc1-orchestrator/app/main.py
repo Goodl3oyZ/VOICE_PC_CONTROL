@@ -1,6 +1,6 @@
 """Composition root: pick real or fake adapters from settings and build the app.
 
-Run:  uvicorn app.main:build --factory --host 127.0.0.1 --port 8000   (behind Caddy for HTTPS)
+Run:  uvicorn app.main:build --factory --host 127.0.0.1 --port 8000   (published by a Cloudflare tunnel)
 """
 from __future__ import annotations
 
@@ -36,15 +36,22 @@ def build(settings: Settings | None = None) -> FastAPI:
 
     if s.llm == "ollama":
         from .adapters.ollama_llm import OllamaLLM
-        llm = OllamaLLM(s.ollama_url, s.ollama_model)
+        llm = OllamaLLM(s.ollama_url, s.ollama_model, timeout=s.llm_timeout_s)
     elif s.llm == "openai":  # llama.cpp llama-server, vLLM, LM Studio
         from .adapters.openai_compat_llm import OpenAICompatLLM
         llm = OpenAICompatLLM(s.openai_url, s.openai_model, timeout=s.llm_timeout_s)
     else:
         llm = ScriptedLLM()  # refuses everything not handled by shortcuts
 
-    heartbeat = None
-    if s.pc2 == "http":
+    heartbeat, hub = None, None
+    if s.pc2 == "relay":  # PC2 dials out to /agent/ws (no VPN, no open port on the notebook)
+        if len(s.pc2_secret) < 32:
+            raise SystemExit("VPC_PC2_SECRET must be set (>= 32 chars) when VPC_PC2=relay")
+        from .adapters.agent_hub import AgentHub, PC2RelayTools
+        hub = AgentHub(s.pc2_secret.encode())
+        tools = PC2RelayTools(hub, s.pc2_secret.encode())
+        heartbeat = s.heartbeat_s
+    elif s.pc2 == "http":
         if len(s.pc2_secret) < 32:
             raise SystemExit("VPC_PC2_SECRET must be set (>= 32 chars) when VPC_PC2=http")
         from .adapters.pc2_http import PC2HttpTools
@@ -59,4 +66,14 @@ def build(settings: Settings | None = None) -> FastAPI:
                                                   llm_timeout_s=s.llm_timeout_s,
                                                   stt_timeout_s=float(os.environ.get("VPC_STT_TIMEOUT_S", "20")),
                                                   heartbeat_enabled=heartbeat is not None))
-    return create_app(orch, store, bus, static_dir=s.static_dir, heartbeat_interval=heartbeat)
+    webauth = None
+    if s.public_url:
+        if len(s.session_secret) < 32:
+            raise SystemExit("VPC_SESSION_SECRET must be set (>= 32 chars) when VPC_PUBLIC_URL is set")
+        from .api.webauth import WebAuth, WebAuthConfig
+        webauth = WebAuth(WebAuthConfig(
+            public_url=s.public_url, session_secret=s.session_secret.encode(),
+            google_client_id=s.google_client_id, google_client_secret=s.google_client_secret,
+            allowed_emails={e.strip().lower() for e in s.allowed_emails.split(",") if e.strip()}), store)
+    return create_app(orch, store, bus, static_dir=s.static_dir, heartbeat_interval=heartbeat,
+                      webauth=webauth, hub=hub, allow_bearer=s.allow_bearer)

@@ -1,0 +1,25 @@
+# /etc/systemd/system/voice-pc-control.service — PC1 orchestrator (installed by infra/pc1/deploy.sh)
+[Unit]
+Description=Voice PC Control - PC1 orchestrator
+After=network-online.target docker.service
+Wants=network-online.target
+
+[Service]
+User=vpc
+Group=vpc
+EnvironmentFile=/etc/voice-pc-control.env
+Environment=PYTHONPATH=/opt/voice-pc-control/contracts:/opt/voice-pc-control/pc1-orchestrator
+Environment=HF_HOME=/var/lib/vpc/hf
+WorkingDirectory=/opt/voice-pc-control/pc1-orchestrator
+ExecStart=/opt/voice-pc-control/.venv/bin/uvicorn app.main:build --factory --host 127.0.0.1 --port 8000 --no-access-log
+Restart=on-failure
+RestartSec=5
+MemoryMax=1500M
+Nice=5
+NoNewPrivileges=true
+ProtectSystem=strict
+ReadWritePaths=/var/lib/vpc
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

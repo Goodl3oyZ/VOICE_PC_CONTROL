@@ -1,0 +1,21 @@
+# Excerpt of /etc/cloudflared/config.yml on PC1 (locally-managed tunnel). Only the entries for this project
+# are shown; keep your other hostnames. Order matters: the catch-all 404 must stay LAST.
+tunnel: <TUNNEL-UUID>
+credentials-file: /root/.cloudflared/<TUNNEL-UUID>.json
+
+ingress:
+  # Voice remote (PWA + API + /agent/ws for the PC2 agent). Auth is enforced by the app (Google + device key).
+  - hostname: pc.example.com
+    service: http://localhost:8000
+
+  # Open WebUI chat (Google/GitHub OAuth inside Open WebUI; WEBUI_URL must equal this URL).
+  - hostname: chat.example.com
+    service: http://localhost:8080
+
+  - service: http_status:404
+
+# After editing:
+#   cloudflared --config /etc/cloudflared/config.yml tunnel ingress validate
+#   cloudflared tunnel route dns <TUNNEL-UUID> pc.example.com     # creates the DNS CNAME once
+#   systemctl restart cloudflared
+# Never add Ollama (11434) or the agent port here.

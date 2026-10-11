@@ -40,13 +40,22 @@ export class ApiError extends Error {
   }
 }
 
-export class Api {
-  constructor(private token: string) {}
+export interface AuthState {
+  authenticated: boolean;
+  email: string | null;
+  paired: boolean;
+  google_enabled: boolean;
+}
 
+/**
+ * Auth lives in HttpOnly cookies set by PC1 (Google session + paired-device token), so JavaScript never
+ * sees a secret. Every request carries X-Requested-With, which the server requires as CSRF protection.
+ */
+export class Api {
   private async req<T>(method: string, path: string, body?: BodyInit, json = true): Promise<T> {
-    const headers: Record<string, string> = { Authorization: `Bearer ${this.token}` };
+    const headers: Record<string, string> = { "X-Requested-With": "voicepc" };
     if (body !== undefined && json) headers["Content-Type"] = "application/json";
-    const res = await fetch(path, { method, headers, body });
+    const res = await fetch(path, { method, headers, body, credentials: "same-origin" });
     if (!res.ok) {
       let detail = res.statusText;
       try {
@@ -75,8 +84,14 @@ export class Api {
   jobs = (limit = 50) => this.req<Job[]>("GET", `/jobs?limit=${limit}`);
   status = () => this.req<{ pc2_online: boolean; pc2: Record<string, unknown> }>("GET", "/status");
 
+  me = () => this.req<AuthState>("GET", "/auth/me");
+  pair = (key: string, label: string) =>
+    this.req<{ paired: boolean; device: string }>("POST", "/auth/pair", JSON.stringify({ key, label }));
+  logout = () => this.req<{ ok: boolean }>("POST", "/auth/logout");
+  unpair = () => this.req<{ ok: boolean }>("POST", "/auth/unpair");
+
   eventsUrl() {
     const proto = location.protocol === "https:" ? "wss:" : "ws:";
-    return `${proto}//${location.host}/events?token=${encodeURIComponent(this.token)}`;
+    return `${proto}//${location.host}/events`; // cookies + Origin authenticate the socket
   }
 }

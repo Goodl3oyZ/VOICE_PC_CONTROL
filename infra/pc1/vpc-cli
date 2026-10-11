@@ -1,0 +1,10 @@
+#!/bin/bash
+# /usr/local/bin/vpc-cli — admin commands for the PC1 orchestrator (runs as the service user with its env).
+#   vpc-cli set-pairing-key            new Secret Key for pairing browsers (printed once)
+#   vpc-cli list-devices               paired browsers / devices
+#   vpc-cli revoke-device <name>       un-pair a lost device immediately
+#   vpc-cli verify-audit               check the audit log hash chain
+#   vpc-cli add-device <name>          bearer token for CLI use (only works if VPC_ALLOW_BEARER=true)
+set -a; . /etc/voice-pc-control.env; set +a
+exec sudo -E -u vpc env PYTHONPATH=/opt/voice-pc-control/contracts:/opt/voice-pc-control/pc1-orchestrator \
+  /opt/voice-pc-control/.venv/bin/python -m app.cli "$@"

@@ -22,6 +22,7 @@ CREATE TABLE IF NOT EXISTS audit (
   prev_hash TEXT, hash TEXT);
 CREATE TABLE IF NOT EXISTS devices (
   name TEXT PRIMARY KEY, token_hash TEXT UNIQUE, created_at REAL, revoked_at REAL);
+CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT);
 """
 GENESIS = "0" * 64
 
@@ -132,6 +133,17 @@ class SqliteStore:
             row = self._db.execute("SELECT name FROM devices WHERE token_hash=? AND revoked_at IS NULL",
                                    (_hash_token(token),)).fetchone()
         return row["name"] if row else None
+
+    # -- settings (e.g. hashed pairing key, rotatable at runtime via CLI)
+    def get_setting(self, key: str) -> str | None:
+        with self._lock:
+            row = self._db.execute("SELECT value FROM settings WHERE key=?", (key,)).fetchone()
+        return row["value"] if row else None
+
+    def set_setting(self, key: str, value: str) -> None:
+        with self._lock:
+            self._db.execute("INSERT INTO settings(key, value) VALUES(?,?) "
+                             "ON CONFLICT(key) DO UPDATE SET value=excluded.value", (key, value))
 
     def list_devices(self) -> list[dict[str, Any]]:
         with self._lock:

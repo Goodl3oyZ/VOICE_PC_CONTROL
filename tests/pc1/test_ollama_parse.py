@@ -42,6 +42,7 @@ async def test_request_shape_and_untrusted_label():
     r = await llm.plan("สถานะ", ctx)
     assert r.kind == "tool_call"
     assert seen["model"] == "m" and seen["options"]["temperature"] == 0 and seen["keep_alive"]
+    assert "num_ctx" not in seen["options"]  # server default, so it never forces a model reload
     assert any("UNTRUSTED" in m["content"] for m in seen["messages"] if m["role"] == "tool")
 
 
@@ -64,6 +65,21 @@ async def test_openai_compat_adapter():
     bad = httpx.AsyncClient(transport=httpx.MockTransport(lambda r: httpx.Response(200, json={})),
                             base_url="http://llama")
     assert (await OpenAICompatLLM(client=bad).plan("x", PlanContext("", []))).kind == "invalid"
+
+
+async def test_ollama_think_flag_and_fallback():
+    bodies = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        body = json.loads(request.content)
+        bodies.append(body)
+        if "think" in body:
+            return httpx.Response(400, json={"error": "model does not support thinking"})
+        return httpx.Response(200, json={"message": {"content": "ไม่ได้: x"}})
+
+    client = httpx.AsyncClient(transport=httpx.MockTransport(handler), base_url="http://ollama")
+    r = await OllamaLLM(client=client).plan("x", PlanContext("", []))
+    assert r.kind == "final" and bodies[0]["think"] is False and "think" not in bodies[1]
 
 
 async def test_http_error_is_invalid():
