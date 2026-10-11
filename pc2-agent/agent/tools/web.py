@@ -28,9 +28,10 @@ def _guard(fn):  # type: ignore[no-untyped-def]
 @register("web_search")
 @_guard
 def web_search(args: WebSearchArgs, ctx: ToolContext) -> ToolResult:
-    results = ctx.browser.search(args.query, args.max_results)
+    results = ctx.browser.search(args.query, args.max_results, args.site)
     # verified = the search ran and the results page was parsed (zero results is a valid outcome)
-    return ToolResult(ok=True, verified=True, untrusted=True, data={"query": args.query, "results": results})
+    return ToolResult(ok=True, verified=True, untrusted=True, data={"query": args.query, "site": args.site,
+                                                                       "results": results})
 
 
 @register("open_result")

@@ -134,10 +134,13 @@ Details: [security/THREAT_MODEL.md](security/THREAT_MODEL.md), [ADR-0003](docs/a
 |---|---|---|
 | Open allow-listed apps (Chrome, Notepad, Calculator, Explorer, Cursor) | Apps/sites not on the allowlist (e.g. `regedit`) | Phase 2: read search results, play a YouTube video, tabs, files/Office |
 | Open allow-listed websites (YouTube, Google, GitHub…) | Deleting files, shell commands, payments | Phase 3: AI coding agent on git branches, run tests, diff/revert |
-| Search Google / YouTube (opens the results) | Commands not in English | Phase 4: wake word, voice replies (TTS), Wake-on-LAN |
+| Search the web / YouTube in the agent browser, results on the phone, "open result 2" (reuses the search tab) | Commands not in English | Phase 4: wake word, voice replies (TTS), Wake-on-LAN |
+| Play a song/video on YouTube ("play lofi hip hop"), browser tabs | Solving CAPTCHAs (agent stops and tells you) | |
 | Media keys: play/pause, next/previous, volume, mute (YouTube, Spotify) | Anything ambiguous → asks back instead of guessing | |
 | Status of PC2, Stop everything, cancel a single job | | |
 | Understands intent ("bring up a calculator") via the LLM | | |
+
+In the app, **All commands…** (or saying "help") lists everything you can say, generated from the server.
 
 Measured (English golden set, gemma4-e2b-qat on the GTX 1650 SUPER): tool accuracy 95 %, refusal 100 %,
 clarification 100 %, dangerous commands executed 0, LLM planning p50 0.45 s. Speech-to-text ≈4–5 s per command on CPU

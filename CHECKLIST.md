@@ -121,6 +121,9 @@ the hardware decisions in chapter 13 (see "Open questions" below).
 - [x] CAPTCHA detection → stop and report, never bypass (US-305); Google's automated-search CAPTCHA is avoided by reading Bing instead
 - [x] Web results marked **untrusted** → job tainted → later risk ≥ 2 actions need confirmation (mechanism, US-604)
 - [x] Live E2E through PC1 relay: search → open result → tabs → play → pause → close tab
+- [x] **Tab reuse:** searching never opens a new tab when a search tab is already open (`choose_tab()`, 9 unit cases + 5 agent tests + live real-Chrome test: 3 searches = 1 tab; + YouTube = 2 tabs). Search never overwrites a page the user opened. Old `search_web` (new tab in the user's Chrome per search) disabled
+- [x] Google blocks automated browsers with a CAPTCHA (even headed) → web search reads **Bing**; "search X on google" runs there too and says "(Bing)"
+- [x] **"What can I say?" guide**: `GET /capabilities` (apps/sites from knowledge) → PWA "All commands…" with 38 tap-to-run examples, allowed lists, refused list; voice "help"/"what can I say". Test parses every example and checks the policy allows it
 - [ ] US-302 read & summarise a page with the LLM (untrusted content handling)
 - [ ] US-603 confirm card UI for risk-3 tools (backend done in Phase 1) + first risk-3 tool
 - [ ] US-401/402 files & Office (new file, original untouched)

@@ -40,7 +40,7 @@ TEXT = {
         "previous": "ย้อนกลับไปเพลงก่อนหน้าแล้ว", "volume_up": "เพิ่มเสียงประมาณ {pct}% แล้ว",
         "volume_down": "ลดเสียงประมาณ {pct}% แล้ว", "mute": "สลับปิด/เปิดเสียงแล้ว",
         "media": "ส่งคำสั่งควบคุมเพลงแล้ว", "done": "เสร็จแล้ว",
-        "results": "ผลค้นหา “{query}”: {items}. พูด “open result 2” เพื่อเปิด", "no_results": "ไม่พบผลลัพธ์",
+        "results": "ผลค้นหา “{query}” ({where}): {items}. พูด “open result 2” เพื่อเปิด", "no_results": "ไม่พบผลลัพธ์",
         "opened_result": "เปิดผลลัพธ์ที่ {index}: {title}", "playing": "กำลังเล่น “{title}” บน YouTube",
         "tabs": "เปิดอยู่ {n} แท็บ: {titles}", "tab_switched": "สลับแท็บแล้ว: {title}",
         "tab_closed": "ปิดแท็บแล้ว (เหลือ {n})", "captcha": "เจอ CAPTCHA จึงหยุดไว้ กรุณาทำเองบน PC2",
@@ -55,7 +55,8 @@ TEXT = {
         "previous": "Went back to the previous track", "volume_up": "Volume up about {pct}%",
         "volume_down": "Volume down about {pct}%", "mute": "Toggled mute",
         "media": "Sent the media command", "done": "Done",
-        "results": "Results for “{query}”: {items}. Say “open result 2” to open one", "no_results": "No results found",
+        "results": "Results for “{query}” ({where}): {items}. Say “open result 2” to open one",
+        "no_results": "No results found",
         "opened_result": "Opened result {index}: {title}", "playing": "Playing “{title}” on YouTube",
         "tabs": "{n} tab(s) open: {titles}", "tab_switched": "Switched to: {title}",
         "tab_closed": "Closed the tab ({n} left)",
@@ -103,7 +104,8 @@ def summarize(tool: str, args: dict[str, Any], result: ToolResult, kb: Knowledge
             return t["no_results"]
         items = " · ".join(f"{i}) {r.get('title', '')[:70]} — {r.get('host', '')}"
                            for i, r in enumerate(results[:3], 1))
-        return t["results"].format(query=args["query"], items=items)
+        where = "YouTube" if args.get("site") == "youtube" else "Bing"
+        return t["results"].format(query=args["query"], items=items, where=where)
     if tool == "open_result":
         return t["opened_result"].format(index=args["index"], title=(result.data.get("title") or "")[:90])
     if tool == "youtube_play":

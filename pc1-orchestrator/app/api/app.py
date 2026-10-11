@@ -19,6 +19,7 @@ from starlette.websockets import WebSocketDisconnect
 from ..adapters.agent_hub import AgentHub
 from ..adapters.notify import Broadcaster
 from ..adapters.sqlite_store import SqliteStore
+from ..core.capabilities import capabilities
 from ..core.orchestrator import Conflict, NotFound, Orchestrator
 from .webauth import WebAuth
 
@@ -146,6 +147,10 @@ def create_app(orch: Orchestrator, store: SqliteStore, broadcaster: Broadcaster,
             return (await orch.reply(job_id, body.text, dev)).public()
         except ValueError as e:
             raise HTTPException(422, str(e)) from e
+
+    @app.get("/capabilities")
+    async def capabilities_(_: Device) -> dict[str, Any]:
+        return capabilities(orch.kb, orch.cfg.language)
 
     @app.post("/jobs/{job_id}/cancel")
     async def cancel_job(job_id: str, dev: Device) -> dict[str, Any]:

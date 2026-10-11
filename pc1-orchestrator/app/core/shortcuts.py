@@ -92,11 +92,12 @@ def _media_or_search(text: str) -> ToolCall | None:
         if verb == "play" and site in ("", "youtube"):  # actually play it, not just list results
             return ToolCall(tool="youtube_play", arguments={"query": q}, rationale="shortcut: play")
         if " ".join(verb.split()) in _EN_READ_VERBS and not site:
-            return ToolCall(tool="web_search", arguments={"query": q, "max_results": 5},
+            return ToolCall(tool="web_search", arguments={"query": q, "max_results": 5, "site": "web"},
                             rationale="shortcut: web search")
-        music = m["verb"].lower() in _MUSIC_VERBS
-        site = (m["site"] or ("youtube" if music else "google")).lower()
-        return ToolCall(tool="search_web", arguments={"query": m["q"].strip()[:200], "site": site},
+        music = verb in _MUSIC_VERBS
+        where = "youtube" if (site == "youtube" or (music and not site)) else "web"
+        # all searches run in the agent browser and reuse its search/YouTube tab (no new tab per search)
+        return ToolCall(tool="web_search", arguments={"query": q, "max_results": 5, "site": where},
                         rationale="shortcut: search")
     return None
 

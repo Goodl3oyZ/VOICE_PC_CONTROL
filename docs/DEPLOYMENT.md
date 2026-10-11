@@ -207,6 +207,8 @@ Get-Content $env:LOCALAPPDATA\voice-pc-agent\agent.log -Tail 20
 | Every voice command fails with `TypeError: open() got an unexpected keyword argument 'metadata_errors'` | faster-whisper 1.2.1 vs PyAV ≥ 19 | Fixed in code: audio is decoded by `decode_audio()` in our adapter (no dependency on faster-whisper's decoder) |
 | Jobs stuck in "Waiting for your answer" | Unanswered questions / restart | Cancel button on the job card; auto-expire after 5 min; startup recovery; Stop clears all |
 | "Only English is supported" | `VPC_LANGUAGE=en` and the command was not English | Speak/type English (by design) |
+| Web search shows "CAPTCHA detected" | The search engine challenged the agent browser | By design the agent stops; solve it yourself on PC2. Google always challenges automated browsers, so searches use Bing |
+| A new tab per search | (old behaviour of `search_web`) | Fixed: searches reuse the agent browser's search/YouTube tab; `search_web` disabled |
 | Calculator/Notepad "verified" but window not visible | App opened then closed, or opened on another desktop | Check PC2 screen; the agent verifies the process exists |
 
 ## 8. Rollback

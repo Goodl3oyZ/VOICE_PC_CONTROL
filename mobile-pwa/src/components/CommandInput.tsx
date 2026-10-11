@@ -6,6 +6,7 @@ interface CommandInputProps {
   busy: boolean;
   error: string | null;
   onClearError: () => void;
+  onOpenGuide: () => void;
 }
 
 const QUICK_SUGGESTIONS = [
@@ -17,7 +18,7 @@ const QUICK_SUGGESTIONS = [
   "Status",
 ];
 
-export function CommandInput({ onSubmitText, busy, error, onClearError }: CommandInputProps) {
+export function CommandInput({ onSubmitText, busy, error, onClearError, onOpenGuide }: CommandInputProps) {
   const [text, setText] = useState("");
 
   const handleSubmit = (e: FormEvent) => {
@@ -42,6 +43,9 @@ export function CommandInput({ onSubmitText, busy, error, onClearError }: Comman
           <SparklesIcon size={14} /> Try:
         </span>
         <div className="chips-scroll">
+          <button type="button" className="chip-btn chip-guide" onClick={onOpenGuide}>
+            All commands…
+          </button>
           {QUICK_SUGGESTIONS.map((sugg) => (
             <button
               key={sugg}

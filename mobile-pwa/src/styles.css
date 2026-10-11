@@ -2216,3 +2216,15 @@ a.btn-setup-submit { text-decoration: none; display: flex; justify-content: cent
   flex: none; font-weight: 800; font-size: 0.75rem; letter-spacing: 0.04em;
   padding: 3px 7px; border-radius: var(--radius-xs); background: var(--color-warning); color: #111;
 }
+
+/* Command guide ("What can I say?") */
+.command-guide { max-width: 640px; max-height: 88vh; overflow-y: auto; }
+.guide-group { margin-top: 16px; }
+.guide-group h4 { margin: 0 0 4px; font-size: 0.95rem; }
+.guide-group-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px; margin-bottom: 8px; }
+.guide-group-head h4 { margin: 0; }
+.guide-hint { color: var(--text-secondary); font-size: 0.82rem; }
+.guide-examples { display: flex; flex-wrap: wrap; gap: 8px; }
+.guide-list { margin: 4px 0; color: var(--text-secondary); font-size: 0.9rem; }
+.guide-refused ul { margin: 6px 0 0; padding-left: 18px; color: var(--text-secondary); font-size: 0.9rem; }
+.chip-btn.chip-guide { font-weight: 700; border-color: var(--cyan-border); color: var(--cyan-primary); }

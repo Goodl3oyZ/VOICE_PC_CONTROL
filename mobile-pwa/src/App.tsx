@@ -11,6 +11,7 @@ import { PCStatusPanel } from "./components/PCStatusPanel";
 import { CommandHistory } from "./components/CommandHistory";
 import { LoginScreen, PairScreen } from "./components/AuthGate";
 import { SessionModal } from "./components/SessionModal";
+import { CommandGuide } from "./components/CommandGuide";
 import { OfflineBanner } from "./components/OfflineBanner";
 import { InstallPrompt } from "./components/InstallPrompt";
 import { EnglishOnlyNotice } from "./components/EnglishOnlyNotice";
@@ -129,6 +130,7 @@ function Remote({ api, email, theme, onToggleTheme, onSessionLost, onLogout, onU
   const [wsUp, setWsUp] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [isGuideOpen, setIsGuideOpen] = useState(false);
   const [selectedJob, setSelectedJob] = useState<Job | null>(null);
   const [, tick] = useState(0);
 
@@ -296,6 +298,7 @@ function Remote({ api, email, theme, onToggleTheme, onSessionLost, onLogout, onU
               busy={busy}
               error={error}
               onClearError={() => setError(null)}
+              onOpenGuide={() => setIsGuideOpen(true)}
             />
           </section>
         </div>
@@ -323,6 +326,14 @@ function Remote({ api, email, theme, onToggleTheme, onSessionLost, onLogout, onU
           </section>
         </div>
       </main>
+
+      {/* "What can I say?" guide (from GET /capabilities) */}
+      <CommandGuide
+        isOpen={isGuideOpen}
+        api={api}
+        onClose={() => setIsGuideOpen(false)}
+        onRun={(cmd) => submit(api.sendText(cmd))}
+      />
 
       {/* Account / Device Modal */}
       <SessionModal

@@ -26,6 +26,7 @@ from ..ports import (
     ToolPort,
 )
 from .aliases import AliasNormalizer
+from .capabilities import help_summary, is_help
 from .i18n import YES_WORDS, Messages, is_english
 from .jobs import Job, JobState, new_job_id
 from .knowledge import Knowledge
@@ -285,6 +286,11 @@ class Orchestrator:
                 await self._fail(job, self.t("only_english"), "rejected_language")
                 return
             job.normalized = self.normalize(job.text)
+        if is_help(job.normalized):  # answered by PC1 itself; nothing is sent to PC2
+            await self._move(job, S.PLANNING)
+            job.planner, job.summary = "help", help_summary(self.kb, self.cfg.language)
+            await self._done(job)
+            return
         await self._plan_loop(job)
 
     def _language_ok(self, text: str) -> bool:

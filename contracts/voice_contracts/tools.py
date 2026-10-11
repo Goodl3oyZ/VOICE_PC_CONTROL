@@ -92,6 +92,7 @@ class _QueryArgs(_Args):
 
 class WebSearchArgs(_QueryArgs):
     max_results: int = Field(5, ge=1, le=8, description="How many results to return")
+    site: Literal["web", "youtube"] = Field("web", description="web = web pages, youtube = videos/music")
 
 
 class OpenResultArgs(_Args):
@@ -124,14 +125,19 @@ TOOLS: dict[str, ToolSpec] = {
         ToolSpec("open_url", 1, OpenUrlArgs, "Open an allowed https website in the PC2 browser (เปิดเว็บที่อนุญาต)", 1),
         ToolSpec("get_status", 0, NoArgs, "Show PC2 status and which apps are running (ดูสถานะ PC2)", 1),
         ToolSpec("stop_all", 0, NoArgs, "Stop everything that is running right now (หยุดงานทั้งหมด)", 1),
+        # Disabled: it opened a NEW tab in the user's Chrome on every search. web_search (agent browser)
+        # reuses the existing search/YouTube tab instead. Kept for VPC_LANGUAGE=th installs that rely on it.
         ToolSpec("search_web", 1, SearchWebArgs,
-                 "Search Google, or find videos/music on YouTube, and open the results in Chrome on PC2 (ค้นหา)", 1),
+                 "Search Google, or find videos/music on YouTube, and open the results in Chrome on PC2 (ค้นหา)", 1,
+                 enabled=False),
         ToolSpec("media_control", 1, MediaControlArgs,
                  "Control what is playing (Spotify, YouTube): play/pause, next/previous track, "
                  "volume up/down, mute. 1 volume step = 2% (ควบคุมเพลงและเสียง)", 1),
         # Phase 2 — results from the web are UNTRUSTED data (taint): risk >= 2 tools then need confirmation.
         ToolSpec("web_search", 0, WebSearchArgs,
-                 "Search the web in the agent browser on PC2 and return the top results (titles + links)", 2),
+                 "Search the web (or YouTube with site=youtube) in the agent browser on PC2, "
+                 "return the top results. "
+                 "Reuses the existing search tab", 2),
         ToolSpec("open_result", 1, OpenResultArgs,
                  "Open result number N from the last web_search in the agent browser", 2),
         ToolSpec("youtube_play", 1, YoutubePlayArgs,

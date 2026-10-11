@@ -40,6 +40,15 @@ export class ApiError extends Error {
   }
 }
 
+export interface Capabilities {
+  language: string;
+  english_only: boolean;
+  groups: { id: string; title: string; hint: string; examples: string[] }[];
+  apps: string[];
+  sites: string[];
+  refused: string[];
+}
+
 export interface AuthState {
   authenticated: boolean;
   email: string | null;
@@ -86,6 +95,7 @@ export class Api {
   status = () => this.req<{ pc2_online: boolean; pc2: Record<string, unknown> }>("GET", "/status");
 
   me = () => this.req<AuthState>("GET", "/auth/me");
+  capabilities = () => this.req<Capabilities>("GET", "/capabilities");
   pair = (key: string, label: string) =>
     this.req<{ paired: boolean; device: string }>("POST", "/auth/pair", JSON.stringify({ key, label }));
   logout = () => this.req<{ ok: boolean }>("POST", "/auth/logout");

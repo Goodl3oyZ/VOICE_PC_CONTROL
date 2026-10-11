@@ -20,8 +20,10 @@ from urllib.parse import quote_plus, urlsplit
 
 log = logging.getLogger("pc2.browser")
 
+SEARCH_HOST = "bing.com"  # Google shows a CAPTCHA to automated browsers (even headed); Bing does not
 SEARCH_URL = "https://www.bing.com/search?q="
 RESULT_ITEM = "li.b_algo"
+YT_HOST = "youtube.com"
 YT_SEARCH_URL = "https://www.youtube.com/results?search_query="
 YT_FIRST_VIDEO = "ytd-video-renderer a#video-title"
 CAPTCHA_MARKERS = ("unusual traffic", "verify you are human", "i'm not a robot", "are you a robot",
@@ -37,7 +39,7 @@ class BrowserError(Exception):
 
 
 class Browser(Protocol):
-    def search(self, query: str, max_results: int) -> list[dict[str, str]]: ...
+    def search(self, query: str, max_results: int, site: str = "web") -> list[dict[str, str]]: ...
     def open_result(self, index: int) -> dict[str, str]: ...
     def youtube_play(self, query: str) -> dict[str, Any]: ...
     def tabs(self, action: str) -> dict[str, Any]: ...
@@ -64,6 +66,7 @@ class PlaywrightBrowser:
         self._ctx: Any = None
         self._pw: Any = None
         self.last_results: list[dict[str, str]] = []
+        self.last_site = "web"
 
     # ---------------------------------------------------------------- worker thread
     def _run(self, fn: Callable[[], Any], timeout: float = 45.0) -> Any:
@@ -101,10 +104,12 @@ class PlaywrightBrowser:
         self._ctx.on("close", lambda *_: setattr(self, "_ctx", None))
         return self._ctx
 
-    def _page(self) -> Any:
+    def _tab_for(self, host: str) -> Any:
+        """Reuse a tab already on `host` (e.g. the search or YouTube tab) instead of opening a new one."""
         ctx = self._context()
         pages = [p for p in ctx.pages if not p.is_closed()]
-        page = pages[-1] if pages else ctx.new_page()
+        i = choose_tab([p.url for p in pages], host)
+        page = pages[i] if i is not None else ctx.new_page()
         page.bring_to_front()
         return page
 
@@ -120,9 +125,24 @@ class PlaywrightBrowser:
             raise CaptchaDetected(url)
 
     # ---------------------------------------------------------------- tools
-    def search(self, query: str, max_results: int = 5) -> list[dict[str, str]]:
+    def search(self, query: str, max_results: int = 5, site: str = "web") -> list[dict[str, str]]:
         def go() -> list[dict[str, str]]:
-            page = self._page()
+            if site == "youtube":
+                page = self._tab_for(YT_HOST)
+                page.goto(YT_SEARCH_URL + quote_plus(query), wait_until="domcontentloaded")
+                self._check_captcha(page)
+                page.wait_for_selector(YT_FIRST_VIDEO, timeout=15000)
+                out = []
+                vids = page.locator(YT_FIRST_VIDEO)
+                for i in range(min(vids.count(), max_results)):
+                    a = vids.nth(i)
+                    href = a.get_attribute("href") or ""
+                    out.append({"title": (a.get_attribute("title") or a.inner_text() or "").strip()[:200],
+                                "url": "https://www.youtube.com" + href[:300] if href.startswith("/") else href[:500],
+                                "host": "youtube.com"})
+                self.last_results, self.last_site = out, "youtube"
+                return out
+            page = self._tab_for(SEARCH_HOST)
             page.goto(SEARCH_URL + quote_plus(query), wait_until="domcontentloaded")
             page.wait_for_timeout(800)
             self._check_captcha(page)
@@ -143,25 +163,27 @@ class PlaywrightBrowser:
                 shown = cite.inner_text().strip() if cite.count() else ""
                 out.append({"title": (a.inner_text() or "").strip()[:200], "url": href[:1000],
                             "host": _display_host(shown) or _host(href)})
-            self.last_results = out
+            self.last_results, self.last_site = out, "web"
             return out
         return self._run(go)
 
     def open_result(self, index: int) -> dict[str, str]:
         if not 1 <= index <= len(self.last_results):
             raise BrowserError(f"no result #{index} (last search returned {len(self.last_results)})")
-        item = self.last_results[index - 1]
+        item, site = self.last_results[index - 1], self.last_site
 
         def go() -> dict[str, str]:
-            page = self._context().new_page()
+            # YouTube result: play it in the YouTube tab. Web result: new tab, so the results tab stays.
+            page = self._tab_for(YT_HOST) if site == "youtube" else self._context().new_page()
             page.goto(item["url"], wait_until="domcontentloaded")
             self._check_captcha(page)
+            page.bring_to_front()
             return {"title": (page.title() or item["title"])[:200], "url": page.url[:500], "host": _host(page.url)}
         return self._run(go)
 
     def youtube_play(self, query: str) -> dict[str, Any]:
         def go() -> dict[str, Any]:
-            page = self._page()
+            page = self._tab_for(YT_HOST)
             page.goto(YT_SEARCH_URL + quote_plus(query), wait_until="domcontentloaded")
             self._check_captcha(page)
             page.wait_for_selector(YT_FIRST_VIDEO, timeout=15000)
@@ -198,9 +220,26 @@ class PlaywrightBrowser:
             return {"tabs": [{"title": (p.title() or "")[:120], "host": _host(p.url)} for p in pages]}
         return self._run(go)
 
+    def close(self) -> None:
+        if self._ctx is not None:
+            self._run(lambda: self._ctx.close())
+
+
+def choose_tab(urls: list[str], host: str) -> int | None:
+    """Which existing tab to reuse for `host`: a tab already on that site (most recent first), else an empty
+    new tab; None means "open a new tab". Pure function so the tab rule is unit-tested."""
+    for i in range(len(urls) - 1, -1, -1):
+        h = _host(urls[i])
+        if h == host or h.endswith("." + host):
+            return i
+    for i in range(len(urls) - 1, -1, -1):
+        if urls[i] in ("about:blank", "chrome://newtab/", "chrome://new-tab-page/", ""):
+            return i
+    return None
+
 
 class FakeBrowser:
-    """Test double with the same behaviour contract (results memory, captcha, playing state)."""
+    """Test double: models tabs by URL and uses the same choose_tab() rule as the real browser."""
 
     def __init__(self) -> None:
         self.calls: list[tuple[str, Any]] = []
@@ -208,29 +247,56 @@ class FakeBrowser:
         self.results = [{"title": f"Result {i}", "url": f"https://example{i}.com/", "host": f"example{i}.com"}
                         for i in range(1, 9)]
         self.last_results: list[dict[str, str]] = []
-        self.open_tabs = ["New Tab"]
+        self.last_site = "web"
+        self.tab_urls: list[str] = ["about:blank"]
+        self.active = 0
 
-    def search(self, query: str, max_results: int = 5) -> list[dict[str, str]]:
-        self.calls.append(("search", query))
+    def _goto_on(self, host: str, url: str) -> None:
+        i = choose_tab(self.tab_urls, host)
+        if i is None:
+            self.tab_urls.append(url)
+            i = len(self.tab_urls) - 1
+        else:
+            self.tab_urls[i] = url
+        self.active = i
+
+    def search(self, query: str, max_results: int = 5, site: str = "web") -> list[dict[str, str]]:
+        self.calls.append(("search", query, site))
         if self.captcha:
             raise CaptchaDetected("https://www.bing.com/challenge")
-        self.last_results = self.results[:max_results]
+        if site == "youtube":
+            self._goto_on(YT_HOST, YT_SEARCH_URL + quote_plus(query))
+            self.last_results = [{"title": f"{query} video {i}", "url": f"https://www.youtube.com/watch?v={i}",
+                                  "host": "youtube.com"} for i in range(1, max_results + 1)]
+        else:
+            self._goto_on(SEARCH_HOST, SEARCH_URL + quote_plus(query))
+            self.last_results = self.results[:max_results]
+        self.last_site = site
         return self.last_results
 
     def open_result(self, index: int) -> dict[str, str]:
         self.calls.append(("open_result", index))
         if not 1 <= index <= len(self.last_results):
             raise BrowserError(f"no result #{index} (last search returned {len(self.last_results)})")
-        self.open_tabs.append(self.last_results[index - 1]["title"])
-        return dict(self.last_results[index - 1])
+        item = self.last_results[index - 1]
+        if self.last_site == "youtube":
+            self._goto_on(YT_HOST, item["url"])
+        else:
+            self.tab_urls.append(item["url"])
+            self.active = len(self.tab_urls) - 1
+        return dict(item)
 
     def youtube_play(self, query: str) -> dict[str, Any]:
         self.calls.append(("youtube_play", query))
+        self._goto_on(YT_HOST, "https://www.youtube.com/watch?v=x")
         return {"title": f"{query} (official video)", "url": "https://www.youtube.com/watch?v=x", "playing": True,
                 "position_s": 3.0}
 
     def tabs(self, action: str) -> dict[str, Any]:
         self.calls.append(("tabs", action))
-        if action == "close" and self.open_tabs:
-            self.open_tabs.pop()
-        return {"tabs": [{"title": t, "host": ""} for t in self.open_tabs]}
+        if action == "close" and self.tab_urls:
+            self.tab_urls.pop(self.active)
+            self.active = max(0, len(self.tab_urls) - 1)
+        elif action in ("next", "previous") and self.tab_urls:
+            self.active = (self.active + (1 if action == "next" else -1)) % len(self.tab_urls)
+        return {"tabs": [{"title": u, "host": _host(u)} for u in self.tab_urls]}

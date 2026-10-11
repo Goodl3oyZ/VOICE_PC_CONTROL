@@ -33,15 +33,16 @@ def test_media_shortcuts(kb, text, action, steps):
 
 
 @pytest.mark.parametrize("text,query,site", [
-    ("ค้นหาวิธีติดตั้ง docker บน windows", "วิธีติดตั้ง docker บน windows", "google"),
+    ("ค้นหาวิธีติดตั้ง docker บน windows", "วิธีติดตั้ง docker บน windows", "web"),
     ("หา lofi ใน youtube", "lofi", "youtube"),
     ("เปิดเพลง ลาลาลอย", "ลาลาลอย", "youtube"),
     ("หาเพลง bodyslam หน่อย", "bodyslam", "youtube"),
 ])
 def test_search_shortcuts(kb, text, query, site):
     call = match_shortcut(text, kb)
-    assert call is not None and call.tool == "search_web"
-    assert call.arguments == {"query": query, "site": site}
+    # all searches run in the agent browser (reusing its tab); search_web is disabled
+    assert call is not None and call.tool == "web_search"
+    assert call.arguments == {"query": query, "site": site, "max_results": 5}
 
 
 def test_english_search_reads_results(kb):
@@ -82,11 +83,12 @@ def test_media_bad_args_denied(kb, args):
 async def test_media_and_search_run(rig):
     from voice_contracts.models import ToolResult
     rig.pc2.handlers["media_control"] = lambda a: ToolResult(ok=True, verified=True, data={"steps": a.get("steps", 1)})
-    rig.pc2.handlers["search_web"] = lambda a: ToolResult(ok=True, verified=True)
+    rig.pc2.handlers["web_search"] = lambda a: ToolResult(ok=True, verified=True, untrusted=True, data={
+        "results": [{"title": "Lofi Girl", "host": "youtube.com"}]})
     job = await rig.run_text("เพิ่มเสียง 20%")
     assert job.state == S.DONE and job.summary == "เพิ่มเสียงประมาณ 20% แล้ว"
     job = await rig.run_text("หา lofi ใน youtube")
-    assert job.state == S.DONE and job.summary == "ค้นหา “lofi” บน YouTube แล้ว"
+    assert job.state == S.DONE and job.summary.startswith("ผลค้นหา “lofi” (YouTube): 1) Lofi Girl")
 
 
 # ---------------------------------------------------------------- stuck jobs

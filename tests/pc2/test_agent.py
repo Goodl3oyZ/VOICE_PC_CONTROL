@@ -225,11 +225,11 @@ def test_media_control_sends_keys(agent, launcher):
     assert launcher.keys[-1] == 0xB0 and len(launcher.keys) == 4
 
 
-def test_search_web_opens_encoded_url(agent, launcher):
+def test_search_web_is_disabled(agent, launcher):
+    """search_web opened a NEW tab in the user's Chrome on every search; replaced by web_search."""
     client, _ = agent
     r = call(client, "/tool/search_web", {"query": "docker & windows", "site": "google"}).json()
-    assert r["ok"] and r["verified"]
-    assert launcher.launched == [["C:/chrome.exe", "https://www.google.com/search?q=docker+%26+windows"]]
+    assert r["error"] == "policy deny: unknown tool" and launcher.launched == []
 
 
 @pytest.mark.security
