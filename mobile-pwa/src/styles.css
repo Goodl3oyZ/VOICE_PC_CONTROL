@@ -2298,3 +2298,68 @@ a.btn-setup-submit { text-decoration: none; display: flex; justify-content: cent
 .guide-list { margin: 4px 0; color: var(--text-secondary); font-size: 0.9rem; }
 .guide-refused ul { margin: 6px 0 0; padding-left: 18px; color: var(--text-secondary); font-size: 0.9rem; }
 .chip-btn.chip-guide { font-weight: 700; border-color: var(--cyan-border); color: var(--cyan-primary); }
+
+/* ---- Phase 4: hands-free ---- */
+.hands-free-panel {
+  margin-top: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px 14px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-subtle);
+  background: var(--bg-card);
+  text-align: left;
+}
+
+.hands-free-panel.is-on {
+  border-color: var(--cyan-border);
+}
+
+.hf-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 40px;
+  cursor: pointer;
+}
+
+.hf-row input {
+  width: 22px;
+  height: 22px;
+  flex: none;
+  accent-color: var(--cyan-primary);
+}
+
+.hf-label {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 0.92rem;
+  color: var(--text-primary);
+}
+
+.hf-status {
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+}
+
+.hf-hearing,
+.hf-sending,
+.hf-armed {
+  color: var(--cyan-primary);
+  font-weight: 600;
+}
+
+.hf-hint {
+  margin: 0;
+  font-size: 0.8rem;
+  line-height: 1.45;
+  color: var(--text-secondary);
+}
+
+.hf-error {
+  margin: 0;
+  font-size: 0.82rem;
+  color: var(--color-danger);
+}

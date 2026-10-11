@@ -9,6 +9,7 @@ Safety model:
 """
 from __future__ import annotations
 
+import ast
 import json
 import os
 import subprocess
@@ -195,34 +196,95 @@ def _ensure_ai_branch(ctx: ToolContext, project: str, root: Path, base: str) -> 
     return new
 
 
+def _find_span(text: str, old: str) -> tuple[int, int, bool]:
+    """Where old_text is in text: exact match first, then a unique line-by-line match ignoring indentation and
+    trailing spaces (small models often get whitespace slightly wrong). Raises if missing or ambiguous."""
+    n = text.count(old)
+    if n == 1:
+        i = text.index(old)
+        return i, i + len(old), False
+    if n > 1:
+        raise CodeError(f"old_text appears {n} times; include more context so it is unique")
+    # Compare non-blank lines only: models often collapse the two blank lines between functions into one.
+    want = [ln.strip() for ln in old.split("\n") if ln.strip()]
+    if not want:
+        raise CodeError("old_text not found in the file")
+    lines = text.split("\n")
+    starts = [0]
+    for ln in lines:
+        starts.append(starts[-1] + len(ln) + 1)
+    nonblank = [(i, ln.strip()) for i, ln in enumerate(lines) if ln.strip()]
+    hits = [k for k in range(len(nonblank) - len(want) + 1)
+            if [s for _, s in nonblank[k:k + len(want)]] == want]
+    if len(hits) != 1:
+        raise CodeError("old_text not found in the file (copy it exactly from read_file)" if not hits
+                        else f"old_text appears {len(hits)} times; include more context so it is unique")
+    first, last = nonblank[hits[0]][0], nonblank[hits[0] + len(want) - 1][0]
+    return starts[first], starts[last + 1] - 1, True  # whole lines, without the final line break
+
+
+def _top_level_names(src: str) -> set[str]:
+    return {n.name for n in ast.parse(src).body
+            if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef))}
+
+
+def _check_python_edit(before: str | None, after: str, allow_removing: bool) -> None:
+    """Guardrails for small models: no syntax errors, and no silently deleted functions (G3: a new function
+    replaced an existing one and broke its tests)."""
+    try:
+        new_names = _top_level_names(after)
+    except SyntaxError as e:
+        raise CodeError(f"edit not applied: the file would not be valid Python (line {e.lineno}: {e.msg})") from e
+    if before is None or allow_removing:
+        return
+    try:
+        removed = sorted(_top_level_names(before) - new_names)
+    except SyntaxError:
+        return  # the file was already broken: let the model fix it
+    if removed:
+        raise CodeError(f"edit not applied: it would delete {', '.join(removed)}. Keep existing code; to add "
+                        "a new function use old_text '' (append)")
+
+
 @register("edit_file")
 @_code_tool
 def edit_file(args: EditFileArgs, ctx: ToolContext) -> ToolResult:
     entry, root = _project(ctx, args.project)
     p = _resolve(root, args.path)
-    if args.old_text == "":
-        if p.exists():
-            raise CodeError("file already exists; give old_text to change it")
-        before = None
-    else:
+    before: str | None = None
+    crlf = False
+    if p.exists():
         if not p.is_file():
-            raise CodeError(f"file not found: {args.path}")
-        before = p.read_text(encoding="utf-8")
-        n = before.count(args.old_text)
-        if n == 0:
-            raise CodeError("old_text not found in the file (it must match exactly)")
-        if n > 1:
-            raise CodeError(f"old_text appears {n} times; include more context so it is unique")
+            raise CodeError(f"not a file: {args.path}")
+        raw = p.read_bytes().decode("utf-8")
+        crlf = "\r\n" in raw
+        before = raw.replace("\r\n", "\n")
+    elif args.old_text:
+        raise CodeError(f"file not found: {args.path}")
+    new_text = args.new_text.replace("\r\n", "\n")
+    if before is None:
+        after = new_text
+    elif args.old_text == "":  # append (e.g. a new function at the end of the module)
+        body = before if before.endswith("\n") or not before else before + "\n"
+        sep = "" if not body or new_text.startswith("\n") else ("\n\n" if p.suffix == ".py" else "\n")
+        after = body + sep + (new_text if new_text.endswith("\n") else new_text + "\n")
+    else:
+        a, b, linewise = _find_span(before, args.old_text.replace("\r\n", "\n"))
+        if linewise and new_text.endswith("\n"):
+            new_text = new_text[:-1]  # the matched lines keep their own line break
+        after = before[:a] + new_text + before[b:]
+    if p.suffix == ".py":
+        _check_python_edit(before, after, args.allow_removing)
     branch = _ensure_ai_branch(ctx, args.project, root, entry.base_branch)
     p.parent.mkdir(parents=True, exist_ok=True)
-    after = args.new_text if before is None else before.replace(args.old_text, args.new_text, 1)
-    p.write_text(after, encoding="utf-8", newline="")
+    p.write_bytes((after.replace("\n", "\r\n") if crlf else after).encode("utf-8"))
     _git(root, "add", "--", p.relative_to(root).as_posix())
     _git(root, "commit", "-q", "-m", f"ai: edit {args.path}")  # checkpoint on the ai/* branch only
     stat = _git(root, "diff", "--stat", "HEAD~1", "HEAD").strip().splitlines()
-    return ToolResult(ok=True, verified=p.read_text(encoding="utf-8") == after,
+    return ToolResult(ok=True, verified=p.read_bytes().decode("utf-8").replace("\r\n", "\n") == after,
                       data={"project": args.project, "branch": branch, "path": args.path,
-                            "created": before is None, "stat": stat[-1] if stat else ""})
+                            "created": before is None, "appended": before is not None and args.old_text == "",
+                            "stat": stat[-1] if stat else ""})
 
 
 @register("run_tests")

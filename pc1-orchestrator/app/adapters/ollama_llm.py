@@ -39,6 +39,8 @@ Rules:
 Coding tasks (only for the listed code projects):
 1. Look before changing: use list_files, search_code and read_file.
 2. Change code with edit_file; old_text must be copied EXACTLY from read_file output, short but unique.
+   To ADD new code (a new function), call edit_file with old_text "" : new_text is appended to the file.
+   Use only file paths shown by list_files.
 3. Then call run_tests. If they fail, read the error, fix it, and run the tests again (at most 3 fixes).
 4. When finished, reply with text starting "DONE:" and one short sentence about what you changed.
 5. Never say tests pass unless run_tests reported passed=true. All work happens on an ai/* branch.
@@ -63,6 +65,8 @@ class OllamaLLM:
              + "\n" + ctx.knowledge_summary}]
         ask = "ASK: " if getattr(self, "language", "th") == "en" else "ถาม: "
         for qa in ctx.history:
+            if qa.get("auto"):
+                continue  # answered by PC1 mid-task: goes after the observations (below)
             msgs.append({"role": "assistant", "content": ask + qa["q"]})
             msgs.append({"role": "user", "content": qa["a"]})
         msgs.append({"role": "user", "content": text})
@@ -77,6 +81,10 @@ class OllamaLLM:
                                     + json.dumps(obs["result"], ensure_ascii=False)[:limit]})
         if any(o["tool"] in CODE_READ_TOOLS or o["tool"] == "edit_file" for o in ctx.observations):
             msgs.append({"role": "user", "content": progress_note(text, ctx.observations)})
+        for qa in ctx.history:
+            if qa.get("auto"):
+                msgs.append({"role": "assistant", "content": ask + qa["q"]})
+                msgs.append({"role": "user", "content": qa["a"]})
         return msgs
 
     async def plan(self, text: str, ctx: PlanContext) -> PlanResult:
@@ -113,13 +121,18 @@ def progress_note(task: str, observations: list[dict[str, Any]]) -> str:
         if not r.get("ok"):
             status = "FAILED: " + str(r.get("error"))[:120]
         elif o["tool"] == "run_tests":
-            status = "tests passed" if (r.get("data") or {}).get("passed") else "tests FAILED"
+            d = r.get("data") or {}
+            errs = [ln.strip() for ln in str(d.get("output_tail", "")).splitlines()
+                    if "Error" in ln or ln.strip().startswith(("E ", "FAILED"))]
+            status = "tests passed" if d.get("passed") else "tests FAILED: " + " | ".join(errs[-3:])[:300]
         else:
             status = "ok"
         lines.append(f"{i}. {o['tool']} {what} -> {status}".replace("  ", " "))
     return (f"Task: {task}\nSteps done so far:\n" + "\n".join(lines) + "\n"
-            "Choose the NEXT single step (do not repeat a step that already succeeded). If the change is made "
-            "and run_tests passed, reply 'DONE: <what you changed>'.")
+            "Choose the NEXT single step (do not repeat a step that already succeeded). If tests failed or an "
+            "edit failed, fix it yourself with read_file/edit_file and run_tests again; do not ask the user. "
+            "Never delete or rename existing functions unless the task says so. If the change is made and "
+            "run_tests passed, reply 'DONE: <what you changed>'.")
 
 
 def parse_message(msg: dict[str, Any]) -> PlanResult:

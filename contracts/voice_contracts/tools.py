@@ -146,8 +146,10 @@ class EditFileArgs(ProjectArgs):
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=False)
     path: str = Field(min_length=1, max_length=300)
     _v = field_validator("path")(classmethod(lambda cls, v: safe_rel_path(v)))
-    old_text: str = Field("", max_length=4000, description="Exact text to replace ('' = create a new file)")
+    old_text: str = Field("", max_length=4000,
+                          description="Exact text to replace; '' = append new_text to the file (or create it)")
     new_text: str = Field(max_length=8000, description="Replacement text")
+    allow_removing: bool = Field(False, description="Only if the task asks to delete/rename functions or classes")
 
 
 @dataclass(frozen=True)

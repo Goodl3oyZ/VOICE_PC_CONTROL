@@ -17,6 +17,7 @@ def coding_pc2(rig, test_results):
     """Fake PC2 coding tools; run_tests returns the given pass/fail sequence."""
     results = iter(test_results)
     h = rig.pc2.handlers
+    h["list_files"] = lambda a: ToolResult(ok=True, verified=True, data={"files": ["calc.py", "test_calc.py"]})
     h["read_file"] = lambda a: ToolResult(ok=True, verified=True, data={"content": "def add(a, b):\n    return a+b\n",
                                                                          "lines": 2})
     h["edit_file"] = lambda a: ToolResult(ok=True, verified=True, data={"branch": "ai/20261012-1", "path": a["path"],
@@ -43,8 +44,9 @@ async def test_code_task_reads_edits_tests_fixes_and_reports(rig_factory):
         PlanResult(kind="final", message="Made add() accept strings"),
     ]
     job = await rig.run_text("in the demo project make add accept numeric strings")
-    assert job.state == S.DONE and len(job.steps) == 5
-    assert [s["tool"] for s in job.steps] == ["read_file", "edit_file", "run_tests", "edit_file", "run_tests"]
+    assert job.state == S.DONE and len(job.steps) == 6
+    assert [s["tool"] for s in job.steps] == ["list_files", "read_file", "edit_file", "run_tests", "edit_file",
+                                              "run_tests"]
     assert job.summary.startswith("Made add() accept strings. 2 edit(s) on branch ai/20261012-1 (calc.py); "
                                   "tests PASSED")
     assert "revert the changes in demo" in job.summary
@@ -127,3 +129,72 @@ def test_planner_sees_its_own_previous_calls_and_progress():
     assert msgs[2]["tool_calls"][0]["function"] == {"name": "read_file",
                                                      "arguments": {"project": "demo", "path": "calc.py"}}
     assert "1. read_file calc.py -> ok" in msgs[-1]["content"] and "2. run_tests -> tests FAILED" in msgs[-1]["content"]
+
+
+async def test_naming_a_project_fetches_files_first_and_offers_only_coding_tools(rig_factory):
+    """G3 run: the model opened Cursor (open_app) or guessed file names; now step 1 is list_files."""
+    rig = rig_factory(language="en")
+    coding_pc2(rig, [True])
+    rig.pc2.handlers["list_files"] = lambda a: ToolResult(ok=True, verified=True, data={"files": ["calc.py"]})
+    rig.llm.script = [tool("edit_file", project="demo", path="calc.py", old_text="", new_text="def f(): pass"),
+                      tool("run_tests", project="demo"), PlanResult(kind="final", message="Added f")]
+    job = await rig.run_text("In the demo project, add a function f")
+    assert [s["tool"] for s in job.steps] == ["list_files", "edit_file", "run_tests"] and job.state == S.DONE
+    offered = {t["function"]["name"] for t in rig.llm.calls[0][1].tools}
+    assert "open_app" not in offered and "edit_file" in offered and "revert_changes" not in offered
+
+
+async def test_coding_tool_error_is_feedback_not_failure(rig_factory):
+    rig = rig_factory(language="en")
+    coding_pc2(rig, [True])
+    rig.pc2.handlers["read_file"] = lambda a: (
+        ToolResult(ok=False, error="file not found: calculator.py") if a["path"] == "calculator.py"
+        else ToolResult(ok=True, verified=True, data={"content": "x", "lines": 1}))
+    rig.llm.script = [tool("read_file", project="demo", path="calculator.py"),
+                      tool("read_file", project="demo", path="calc.py"),
+                      tool("run_tests", project="demo"), PlanResult(kind="final", message="checked")]
+    job = await rig.run_text("in demo check calc")
+    assert job.state == S.DONE and [s["result"]["ok"] for s in job.steps][1:3] == [False, True]
+    assert rig.llm.calls[1][1].observations[-1]["result"]["error"] == "file not found: calculator.py"
+
+
+async def test_steps_of_a_coding_job_do_not_hit_the_command_rate_limit(rig_factory):
+    from app.core.policy import RateLimiter
+    rig = rig_factory(language="en")
+    rig.orch.rate = RateLimiter(limit=2)
+    coding_pc2(rig, [True])
+    rig.llm.script = [tool("read_file", project="demo", path=f"f{i}.py") for i in range(4)] + [
+        PlanResult(kind="final", message="read")]
+    job = await rig.run_text("in demo read some files")
+    assert job.state == S.DONE and len(job.steps) == 5  # list_files + 4 reads, limit was 2
+
+
+async def test_first_mid_task_question_is_answered_by_pc1(rig_factory):
+    """G3 run 3: after failing tests the model asked "what should I do?" instead of fixing the code."""
+    from app.adapters.ollama_llm import OllamaLLM
+    from app.ports import PlanContext
+
+    rig = rig_factory(language="en")
+    coding_pc2(rig, [False, True])
+    rig.llm.script = [tool("edit_file", project="demo", path="calc.py", old_text="a", new_text="b"),
+                      tool("run_tests", project="demo"),
+                      PlanResult(kind="clarify", message="Tests failed. What should I do?"),
+                      tool("edit_file", project="demo", path="calc.py", old_text="b", new_text="c"),
+                      tool("run_tests", project="demo"),
+                      PlanResult(kind="final", message="Fixed")]
+    job = await rig.run_text("in demo fix it")
+    assert job.state == S.DONE and "tests PASSED" in job.summary, (job.error, job.summary)
+    ctx: PlanContext = rig.llm.calls[3][1]
+    assert ctx.history[0]["auto"] == "1"
+    llm = OllamaLLM.__new__(OllamaLLM)
+    llm.language = "en"
+    msgs = llm._messages("in demo fix it", ctx)
+    assert msgs[-1]["role"] == "user" and "keep all existing functions" in msgs[-1]["content"]
+
+    rig2 = rig_factory(language="en")
+    coding_pc2(rig2, [False])
+    rig2.llm.script = [tool("run_tests", project="demo"), PlanResult(kind="clarify", message="Q1?"),
+                       PlanResult(kind="clarify", message="Q2?")]
+    job2 = await rig2.run_text("in demo do something")
+    assert job2.state == S.CLARIFYING and job2.question == "Q2?"  # a second question reaches the user
+    await rig2.orch.cancel(job2.id, "phone")

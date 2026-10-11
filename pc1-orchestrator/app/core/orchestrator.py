@@ -12,7 +12,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
 
-from voice_contracts.models import ToolResult
+from voice_contracts.models import ToolCall, ToolResult
 from voice_contracts.tools import TOOLS, llm_tool_schemas
 
 from ..ports import (
@@ -25,6 +25,7 @@ from ..ports import (
     StorePort,
     STTPort,
     ToolPort,
+    Transcript,
 )
 from .aliases import AliasNormalizer
 from .capabilities import help_summary, is_help
@@ -34,6 +35,7 @@ from .knowledge import Knowledge
 from .policy import PolicyContext, RateLimiter, decide
 from .shortcuts import match_shortcut
 from .summary import coding_report, deny_message, summarize
+from .wake import DEFAULT_WAKE_WORDS, wake_filter
 
 log = logging.getLogger("pc1.orchestrator")
 S = JobState
@@ -57,6 +59,7 @@ class OrchestratorConfig:
     tool_timeout_s: float = 15.0
     slow_tool_timeout_s: float = 150.0  # run_tests can take minutes
     coding_max_steps: int = 15
+    wake_words: tuple[str, ...] = DEFAULT_WAKE_WORDS  # hands-free mode (Phase 4)
     coding_job_timeout_s: float = 900.0
     job_timeout_s: float = 120.0
     max_steps: int = 8
@@ -83,6 +86,7 @@ class Orchestrator:
         self._active: dict[str, Job] = {}
         self._tasks: dict[str, asyncio.Task[Any]] = {}
         self._deadlines: dict[str, asyncio.Timeout] = {}
+        self._wake_busy = False
         self._pc2_lock = asyncio.Lock()
         self.pc2_last_seen: float | None = None
         self.pc2_status: dict[str, Any] = {}
@@ -103,6 +107,31 @@ class Orchestrator:
         job = Job(id=new_job_id(self.clock()), device=device, source="audio",
                   created_at=self.clock(), updated_at=self.clock())
         return await self._start(job, audio, mime)
+
+    async def submit_wake_audio(self, audio: bytes, mime: str, device: str, armed: bool = False) -> dict[str, Any]:
+        """Hands-free segment: transcribe first; only wake-word speech (or "stop" during a job) becomes a job.
+        Ignored speech is not stored or audited — room conversation must leave no trace."""
+        if self._wake_busy:
+            return {"status": "busy"}  # one segment at a time; the phone keeps listening
+        self._wake_busy = True
+        t0 = self.clock()
+        try:
+            tr = await asyncio.wait_for(self.stt.transcribe(audio, mime), self.cfg.stt_timeout_s)
+        except TimeoutError:
+            return {"status": "ignored"}
+        finally:
+            self._wake_busy = False
+        job_active = any(not j.terminal for j in self._active.values())
+        decision = wake_filter(tr.text, self.cfg.wake_words, armed=armed, job_active=job_active)
+        if decision.kind == "ignore":
+            return {"status": "ignored"}
+        if decision.kind == "wake_only":
+            return {"status": "listening"}
+        job = Job(id=new_job_id(self.clock()), device=device, source="audio",
+                  created_at=self.clock(), updated_at=self.clock(), text=decision.command)
+        self._event(job, "stt", "ok", t0)
+        await self._start(job, pre=Transcript(decision.command, tr.confidence, tr.lang))
+        return {"status": "job", "job": job.public()}
 
     async def reply(self, job_id: str, text: str, device: str) -> Job:
         job = self._get_active(job_id)
@@ -234,11 +263,12 @@ class Orchestrator:
             await asyncio.gather(*list(self._tasks.values()), return_exceptions=True)
 
     # ------------------------------------------------------------------ pipeline
-    async def _start(self, job: Job, audio: bytes | None = None, mime: str = "") -> Job:
+    async def _start(self, job: Job, audio: bytes | None = None, mime: str = "",
+                     pre: Transcript | None = None) -> Job:
         self._active[job.id] = job
         self._audit("created", job, {"device": job.device, "source": job.source})
         await self._save(job)
-        self._spawn(job, self._pipeline(job, audio, mime))
+        self._spawn(job, self._pipeline(job, audio, mime, pre))
         return job
 
     def _spawn(self, job: Job, coro: Any) -> None:
@@ -266,18 +296,21 @@ class Orchestrator:
             if self._tasks.get(job.id) is asyncio.current_task():
                 self._tasks.pop(job.id, None)
 
-    async def _pipeline(self, job: Job, audio: bytes | None, mime: str) -> None:
+    async def _pipeline(self, job: Job, audio: bytes | None, mime: str, pre: Transcript | None = None) -> None:
         if job.source == "audio":
             await self._move(job, S.TRANSCRIBING)
-            t0 = self.clock()
-            try:
-                tr = await asyncio.wait_for(self.stt.transcribe(audio or b"", mime),
-                                            self.cfg.stt_timeout_s)
-            except TimeoutError:
-                self._event(job, "stt", "fail", t0)
-                await self._fail(job, self.t("stt_timeout"))
-                return
-            self._event(job, "stt", "ok", t0)
+            if pre is not None:  # hands-free: already transcribed by submit_wake_audio
+                tr = pre
+            else:
+                t0 = self.clock()
+                try:
+                    tr = await asyncio.wait_for(self.stt.transcribe(audio or b"", mime),
+                                                self.cfg.stt_timeout_s)
+                except TimeoutError:
+                    self._event(job, "stt", "fail", t0)
+                    await self._fail(job, self.t("stt_timeout"))
+                    return
+                self._event(job, "stt", "ok", t0)
             job.text, job.stt_confidence = tr.text.strip(), tr.confidence
             if not job.text:
                 await self._fail(job, self.t("no_speech"))
@@ -313,10 +346,17 @@ class Orchestrator:
 
     async def _plan_loop(self, job: Job) -> None:
         while len(job.steps) < (self.cfg.coding_max_steps if _is_coding(job) else self.cfg.max_steps):
-            await self._move(job, S.PLANNING)
+            if job.state != S.PLANNING:  # already planning after an auto-answered question
+                await self._move(job, S.PLANNING)
             plan = await self._plan(job)
             if job.terminal:
                 return
+            if plan.kind == "clarify" and _is_coding(job) and not any(h.get("auto") for h in job.history):
+                # Mid-task questions from a small model are usually "the edit/tests failed, what now?".
+                # Answer once on the user's behalf (recorded in the job's history); a second question goes
+                # to the user.
+                job.history.append({"q": plan.message or "", "a": CODING_NUDGE, "auto": "1"})
+                continue
             if plan.kind == "clarify":
                 job.question, job.clarify_kind = plan.message or self.t("clarify_default"), "llm"
                 await self._ask(job)
@@ -342,8 +382,10 @@ class Orchestrator:
             t0 = self.clock()
             if self.pc2_status.get("kill_switch"):  # cached from the last heartbeat: may be released by now
                 await self.heartbeat()
-            ctx = PolicyContext(self.kb, self.rate, bool(self.pc2_status.get("kill_switch")),
-                                job.tainted)
+            # The rate limit counts commands; later steps of an admitted coding job are bounded by
+            # coding_max_steps and the loop guard instead.
+            rate = self.rate if not (job.steps and _is_coding(job)) else RateLimiter(limit=1_000_000)
+            ctx = PolicyContext(self.kb, rate, bool(self.pc2_status.get("kill_switch")), job.tainted)
             decision = decide(call, ctx)
             self._event(job, "route", decision.decision, t0, tool=call.tool, risk=decision.risk)
             self._audit("route", job, {"tool": call.tool, "arguments": call.arguments,
@@ -384,12 +426,20 @@ class Orchestrator:
             if shortcut is not None:
                 job.planner = "shortcut"
                 return PlanResult(kind="tool_call", call=shortcut)
+            project = mentioned_project(job.normalized, self.kb)
+            if project is not None:  # coding task: give the model the real file names first (no guessing)
+                job.planner = "llm"
+                return PlanResult(kind="tool_call", call=ToolCall(tool="list_files", arguments={"project": project},
+                                                                  rationale="auto: project context"))
         job.planner = "llm"
+        schemas = [t for t in llm_tool_schemas(list(self.kb.apps), list(self.kb.projects))
+                   # open_project is shortcut-only: small models pick it instead of doing a coding task.
+                   if t["function"]["name"] not in SHORTCUT_ONLY_TOOLS]
+        if _is_coding(job):  # inside a coding task only coding tools make sense (no open_app(cursor) detours)
+            schemas = [t for t in schemas if t["function"]["name"] in CODING_LOOP_TOOLS]
         ctx = PlanContext(
             knowledge_summary=self.kb.prompt_summary(),
-            # open_project is shortcut-only: small models pick it instead of doing a coding task.
-            tools=[t for t in llm_tool_schemas(list(self.kb.apps), list(self.kb.projects))
-                   if t["function"]["name"] not in SHORTCUT_ONLY_TOOLS],
+            tools=schemas,
             history=job.history,
             observations=[{"tool": s["tool"], "arguments": s["arguments"], "result": s["result"],
                            "trusted": not s["result"].get("untrusted", False)} for s in job.steps],
@@ -472,6 +522,8 @@ class Orchestrator:
                                          "error": result.error})
         job.summary = summarize(tool, args, result, self.kb, self.cfg.language)
         if not (result.ok and result.verified):
+            if _is_coding(job) and tool in RECOVERABLE_CODING_TOOLS:
+                return True  # the error is shown to the model next step (bounded by max steps / loop guard)
             await self._fail(job, job.summary)
             return False
         return True
@@ -561,6 +613,20 @@ class Orchestrator:
 
 
 SHORTCUT_ONLY_TOOLS = frozenset({"open_project"})
+CODING_NUDGE = ("Please continue without asking me: fix the problem yourself (read_file, then edit_file), keep all "
+                "existing functions, and run_tests again. Reply DONE: when the tests pass.")
+CODING_LOOP_TOOLS = frozenset({"list_files", "read_file", "search_code", "git_status", "edit_file", "run_tests",
+                               "git_diff"})
+RECOVERABLE_CODING_TOOLS = frozenset({"list_files", "read_file", "search_code", "edit_file"})
+
+
+def mentioned_project(text: str, kb: Knowledge) -> str | None:
+    """A registered project named as a word in the command ("in the demo project ...")."""
+    import re
+    for name in kb.projects:
+        if re.search(rf"(?<![\w-]){re.escape(name)}(?![\w-])", text, re.I):
+            return name
+    return None
 # open_project is a one-shot action (like open_app), not a step of a coding task.
 CODING_TOOLS = frozenset({"list_files", "read_file", "search_code", "git_status", "edit_file",
                           "run_tests", "git_diff", "revert_changes"})

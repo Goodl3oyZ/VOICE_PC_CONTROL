@@ -53,6 +53,10 @@ export interface Capabilities {
   refused: string[];
 }
 
+export type WakeResult =
+  | { status: "ignored" | "busy" | "listening" }
+  | { status: "job"; job: Job };
+
 export interface AuthState {
   authenticated: boolean;
   email: string | null;
@@ -90,6 +94,12 @@ export class Api {
     return this.req<Job>("POST", "/command/audio", form, false);
   };
 
+  /** Hands-free segment (Phase 4): PC1 keeps only wake-word speech. */
+  sendWake = (wav: Blob, armed: boolean) => {
+    const form = new FormData();
+    form.append("audio", wav, "segment.wav");
+    return this.req<WakeResult>("POST", `/command/wake?armed=${armed ? "true" : "false"}`, form, false);
+  };
   cancel = (id: string) => this.req<Job>("POST", `/jobs/${encodeURIComponent(id)}/cancel`);
   reply = (id: string, text: string) => this.req<Job>("POST", `/jobs/${encodeURIComponent(id)}/reply`, JSON.stringify({ text }));
   confirm = (id: string, approve: boolean, args_hash: string) =>

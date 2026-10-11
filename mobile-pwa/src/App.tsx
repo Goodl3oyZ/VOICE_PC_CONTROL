@@ -1,7 +1,9 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Api, ApiError, type AuthState, type Job, type ServerEvent } from "./api";
 import { isActive, upsertJob } from "./labels";
 import { useRecorder } from "./useRecorder";
+import { useHandsFree } from "./useHandsFree";
+import { isSpeaking, speak, utteranceFor } from "./speech";
 
 import { Header } from "./components/Header";
 import { MicrophoneHero } from "./components/MicrophoneHero";
@@ -15,6 +17,7 @@ import { CommandGuide } from "./components/CommandGuide";
 import { OfflineBanner } from "./components/OfflineBanner";
 import { InstallPrompt } from "./components/InstallPrompt";
 import { EnglishOnlyNotice } from "./components/EnglishOnlyNotice";
+import { HandsFreePanel } from "./components/HandsFreePanel";
 
 const THEME_KEY = "voicepc.theme";
 
@@ -207,19 +210,62 @@ function Remote({ api, email, theme, onToggleTheme, onSessionLost, onLogout, onU
     return () => window.clearInterval(t);
   }, []);
 
+  // Jobs started from this device: their results may be spoken aloud (Phase 4)
+  const myJobs = useRef(new Set<string>());
+  const spoken = useRef(new Map<string, string>());
+  const [speakOn, setSpeakOn] = useState(() => {
+    try {
+      return localStorage.getItem("vpc.speak") === "1";
+    } catch {
+      return false;
+    }
+  });
+  const toggleSpeak = useCallback(() => {
+    setSpeakOn((v) => {
+      try {
+        localStorage.setItem("vpc.speak", v ? "0" : "1");
+      } catch {
+        /* per-device preference only */
+      }
+      if (v) window.speechSynthesis?.cancel();
+      return !v;
+    });
+  }, []);
+
+  const track = useCallback((job: Job) => {
+    myJobs.current.add(job.id);
+    setJobs((l) => upsertJob(l, job));
+    setSelectedJob(job);
+  }, []);
+
   const submit = useCallback(
     (p: Promise<Job>) => {
       setError(null);
-      p.then((job) => {
-        setJobs((l) => upsertJob(l, job));
-        setSelectedJob(job);
-      }).catch(handleError);
+      p.then(track).catch(handleError);
     },
-    [handleError],
+    [handleError, track],
   );
 
   const onAudio = useCallback((blob: Blob) => submit(api.sendAudio(blob)), [api, submit]);
   const mic = useRecorder(onAudio);
+  const micRecording = useRef(false);
+  micRecording.current = mic.state === "recording";
+  const handsFree = useHandsFree(
+    useCallback((wav: Blob, armed: boolean) => api.sendWake(wav, armed), [api]),
+    track,
+    useCallback(() => isSpeaking() || micRecording.current, []),
+  );
+
+  useEffect(() => {
+    if (!speakOn) return;
+    for (const j of jobs) {
+      if (!myJobs.current.has(j.id) || spoken.current.get(j.id) === j.state) continue;
+      const text = utteranceFor(j);
+      if (text === null) continue;
+      spoken.current.set(j.id, j.state);
+      speak(text);
+    }
+  }, [jobs, speakOn]);
 
   // Active or most recent job
   const activeJob = jobs.find(isActive) || selectedJob || jobs[0];
@@ -289,6 +335,17 @@ function Remote({ api, email, theme, onToggleTheme, onSessionLost, onLogout, onU
               pc2Online={pc2Online}
               busy={busy}
               currentJobState={activeJob?.state}
+            />
+            <HandsFreePanel
+              state={handsFree.state}
+              error={handsFree.error}
+              on={handsFree.on}
+              onToggle={() => {
+                if (!handsFree.on && !speakOn) toggleSpeak(); // hands-free is pointless without spoken replies
+                handsFree.toggle();
+              }}
+              speakOn={speakOn}
+              onToggleSpeak={toggleSpeak}
             />
           </section>
 

@@ -149,3 +149,60 @@ def test_tc_s04_paths_and_projects_are_contained(agent, tool, payload, tmp_path)
     (tmp_path / "secret.txt").write_text("TOP SECRET")
     r = call(client, tool, payload)
     assert not r["ok"] and "TOP SECRET" not in json.dumps(r)
+
+
+def test_empty_old_text_appends_to_existing_file(agent, repo):
+    """Adding a function: small models can't produce an anchor, so '' means append (G3 run, task C10)."""
+    client, _ = agent
+    r = call(client, "edit_file", {"project": "demo", "path": "calc.py", "old_text": "",
+                                   "new_text": "def multiply(a, b):\n    return a * b"})
+    assert r["ok"] and r["data"]["appended"]
+    assert (repo / "calc.py").read_text() == CALC + "\n\ndef multiply(a, b):\n    return a * b\n"
+
+
+def test_whitespace_tolerant_unique_match(agent, repo):
+    client, _ = agent
+    r = call(client, "edit_file", {"project": "demo", "path": "calc.py",
+                                   "old_text": "def add(a, b):\n  return a + b   ",  # wrong indentation/trailing
+                                   "new_text": "def add(a, b):\n    return b + a\n"})
+    assert r["ok"], r
+    assert (repo / "calc.py").read_text() == "def add(a, b):\n    return b + a\n"
+
+
+def test_crlf_files_keep_crlf(agent, repo):
+    client, _ = agent
+    (repo / "win.txt").write_bytes(b"one\r\ntwo\r\n")
+    git(repo, "-c", "user.name=t", "-c", "user.email=t@t", "-c", "core.autocrlf=false", "add", ".")
+    git(repo, "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "-m", "crlf")
+    r = call(client, "edit_file", {"project": "demo", "path": "win.txt", "old_text": "two", "new_text": "2"})
+    assert r["ok"] and (repo / "win.txt").read_bytes() == b"one\r\n2\r\n"
+
+TWO = "def a():\n    return 1\n\n\ndef b():\n    return 2"
+ONE_BLANK = "def a():\n    return 1\n\ndef b():\n    return 2"
+C = "\n\n\ndef c():\n    return 3"
+
+
+def test_match_tolerates_collapsed_blank_lines(agent, repo):
+    """G3 run 2: the model sends the file with ONE blank line where the file has two (PEP 8)."""
+    client, _ = agent
+    (repo / "two.py").write_text(TWO + "\n")
+    git(repo, "-c", "user.name=t", "-c", "user.email=t@t", "add", ".")
+    git(repo, "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "-m", "two")
+    r = call(client, "edit_file", {"project": "demo", "path": "two.py", "old_text": ONE_BLANK, "new_text": TWO + C})
+    assert r["ok"], r
+    assert (repo / "two.py").read_text() == TWO + C + "\n"
+
+
+def test_python_guardrails_block_deleting_functions_and_syntax_errors(agent, repo):
+    """G3 run 3: 'add multiply' replaced divide; also never commit a file that doesn't parse."""
+    client, _ = agent
+    r = call(client, "edit_file", {"project": "demo", "path": "calc.py", "old_text": "def add(a, b):\n    return a + b",
+                                   "new_text": "def multiply(a, b):\n    return a * b"})
+    assert not r["ok"] and "would delete add" in r["error"] and (repo / "calc.py").read_text() == CALC
+    r = call(client, "edit_file", {"project": "demo", "path": "calc.py", "old_text": "return a + b",
+                                   "new_text": "return a +"})
+    assert not r["ok"] and "not be valid Python" in r["error"]
+    assert git(repo, "rev-parse", "--abbrev-ref", "HEAD") == "main"  # nothing applied, no branch
+    r = call(client, "edit_file", {"project": "demo", "path": "calc.py", "old_text": "def add(a, b):\n    return a + b",
+                                   "new_text": "def plus(a, b):\n    return a + b", "allow_removing": True})
+    assert r["ok"]  # an explicit rename is still possible

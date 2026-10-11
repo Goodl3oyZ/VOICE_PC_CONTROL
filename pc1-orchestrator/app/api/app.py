@@ -130,6 +130,20 @@ def create_app(orch: Orchestrator, store: SqliteStore, broadcaster: Broadcaster,
         job = await orch.submit_audio(data, ctype, dev)
         return job.public()
 
+    @app.post("/command/wake")
+    async def command_wake(dev: Device, audio: UploadFile = File(...),
+                           armed: bool = Query(False)) -> dict[str, Any]:
+        """Hands-free segment (Phase 4): returns ignored | listening | busy | job (no job for ignored speech)."""
+        ctype = (audio.content_type or "").split(";")[0].strip().lower()
+        if not ctype.startswith("audio/"):
+            raise HTTPException(415, "audio required")
+        data = await audio.read(MAX_AUDIO_BYTES + 1)
+        if len(data) > MAX_AUDIO_BYTES:
+            raise HTTPException(413, "audio too large")
+        if not data:
+            raise HTTPException(422, "empty audio")
+        return await orch.submit_wake_audio(data, ctype, dev, armed)
+
     @app.get("/jobs")
     async def jobs(_: Device, limit: int = Query(50, ge=1, le=200)) -> list[dict[str, Any]]:
         out = []
