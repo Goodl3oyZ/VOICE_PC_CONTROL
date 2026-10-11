@@ -13,7 +13,9 @@ import ast
 import json
 import os
 import re
-import subprocess
+
+# Only fixed git argv and the project's configured test argv are run; never a shell.
+import subprocess  # nosec B404
 import sys
 import textwrap
 import time
@@ -57,7 +59,8 @@ def _resolve(root: Path, rel: str) -> Path:
 
 
 def _git(root: Path, *args: str, timeout: float = 30) -> str:
-    r = subprocess.run(["git", *args], cwd=root, capture_output=True, text=True, encoding="utf-8",  # noqa: S603,S607
+    # "git" from PATH with argv built here (no shell, no model-supplied command)
+    r = subprocess.run(["git", *args], cwd=root, capture_output=True, text=True, encoding="utf-8",  # noqa: S603,S607  # nosec B603, B607
                        errors="replace", timeout=timeout, env={**os.environ, **AGENT_GIT_ENV},
                        creationflags=NO_WINDOW)
     if r.returncode != 0:
@@ -334,7 +337,8 @@ def run_tests(args: ProjectArgs, ctx: ToolContext) -> ToolResult:
     # No cached bytecode: an edit in the same second with the same size would otherwise run the OLD code
     # and report a false pass.
     env = {**os.environ, "PYTHONDONTWRITEBYTECODE": "1"}
-    r = subprocess.run(entry.test_cmd, cwd=root, capture_output=True, text=True, encoding="utf-8",  # noqa: S603
+    # test_cmd is the owner's argv from agent_config (the model cannot change it); no shell
+    r = subprocess.run(entry.test_cmd, cwd=root, capture_output=True, text=True, encoding="utf-8",  # noqa: S603  # nosec B603
                        errors="replace", timeout=ctx.cfg.tests_timeout_s, creationflags=NO_WINDOW, env=env)
     out = (r.stdout + "\n" + r.stderr).strip()
     return ToolResult(ok=True, verified=True,

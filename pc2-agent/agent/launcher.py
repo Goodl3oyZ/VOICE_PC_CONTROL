@@ -2,7 +2,9 @@
 from __future__ import annotations
 
 import os
-import subprocess  # nosec B404 — argv comes only from the PC2 allowlist
+
+# argv comes only from the PC2 allowlist (no shell)
+import subprocess  # nosec B404
 import sys
 from typing import Protocol
 
@@ -25,7 +27,8 @@ class WindowsLauncher:
     def open_uri(self, uri: str) -> None:
         if sys.platform != "win32":
             raise RuntimeError("URI launch is only supported on Windows")
-        os.startfile(uri)  # type: ignore[attr-defined]  # noqa: S606  # nosec B606 — allowlisted URI
+        # uri is an allowlisted registered URI
+        os.startfile(uri)  # type: ignore[attr-defined]  # noqa: S606  # nosec B606
 
     def is_running(self, process: str) -> bool:
         import psutil

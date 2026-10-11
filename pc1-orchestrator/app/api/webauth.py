@@ -29,7 +29,8 @@ SESSION_COOKIE, DEVICE_COOKIE, STATE_COOKIE = "vpc_session", "vpc_device", "vpc_
 CSRF_HEADER, CSRF_VALUE = "x-requested-with", "voicepc"
 PAIRING_KEY_SETTING = "pairing_key_sha256"
 GOOGLE_AUTH = "https://accounts.google.com/o/oauth2/v2/auth"
-GOOGLE_TOKEN = "https://oauth2.googleapis.com/token"  # noqa: S105 (URL, not a secret)
+# A URL, not a secret
+GOOGLE_TOKEN = "https://oauth2.googleapis.com/token"  # noqa: S105  # nosec B105
 GOOGLE_USERINFO = "https://openidconnect.googleapis.com/v1/userinfo"
 
 
