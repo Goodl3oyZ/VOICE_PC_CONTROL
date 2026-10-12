@@ -149,7 +149,9 @@ the hardware decisions in chapter 13 (see "Open questions" below).
 - [x] Step 2a — Voice PC Chrome extension (`pc2-extension/`, `docs/chrome-extension.md`) driving the user's own Chrome; verified live: YouTube search + play (playing), CAPTCHA reported, non-https refused
 - [x] Step 2b — extension loaded in the owner's Chrome and connected; live via PC1: YouTube play (playing), Google search (no CAPTCHA), tabs
 - [ ] Step 2c — owner tries YouTube/Search from the phone Apps tab (checkpoint); then remove the Playwright browser
-- [ ] Step 3 — Cursor flow (needs `agent login`); spike: `-p` has shell access, gated only by `--force` / `.cursor/cli.json` allow-deny → deny-by-default + approve + `--resume`
+- [x] Step 3a — Code flow: git repos found on PC2 (live: 6 repos), register once with approval (path from PC2's own scan), "Start a new project" (folder + git under %USERPROFILE%/Projects, approval); wizard-only tools denied to the planner
+- [x] Extension stays connected while idle (two-way 10 s keepalive) and reconnects after agent restarts (live: 0 drops in 90 s idle; back 16 s after a 75 s outage in a test Chrome)
+- [ ] Step 3b — Cursor's own agent (needs `agent login`); spike: `-p` has shell access, gated only by `--force` / `.cursor/cli.json` allow-deny → deny-by-default + approve + `--resume`
 - [ ] Step 4 — social (FB, IG, X, TikTok) with approval cards and hourly limit
 - [ ] Step 5 — Office, Steam, OBS
 - [ ] Step 6 — polish, archify onboarding guide, Phase 4 wrap-up
