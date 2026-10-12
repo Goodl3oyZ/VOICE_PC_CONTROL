@@ -139,3 +139,17 @@ def test_stt_endpoint_returns_text_and_creates_no_job(api):
     assert r.status_code == 200 and r.json() == {"text": "the second one"}
     assert len(client.get("/jobs").json()) == before
     assert client.post("/stt", files={"audio": ("a.txt", b"x", "text/plain")}).status_code == 415
+
+
+@pytest.mark.parametrize("text", ["Open cmd", "open the command prompt", "Launch PowerShell as admin",
+                                  "please open regedit", "Open the registry editor", "start a terminal"])
+async def test_shells_and_admin_tools_are_refused_without_the_llm(rig, text):
+    """Red-team D03: "Open cmd" used to open File Explorer (the nearest allowed app)."""
+    job = await rig.run_text(text)
+    assert job.state == S.FAILED and job.outcome == "refused" and rig.pc2.calls == [] and rig.llm.calls == []
+
+
+@pytest.mark.parametrize("text", ["open notepad", "open the terminal project", "show services running on the pc"])
+def test_ordinary_commands_are_not_blocked(kb, text):
+    from app.core.shortcuts import forbidden_target
+    assert forbidden_target(text, kb) is None

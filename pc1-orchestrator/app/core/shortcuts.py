@@ -134,6 +134,25 @@ LOOK_RE = re.compile(r"^(what('?s| is)\s+(on|in)\s+(the\s+|my\s+)?screen|describ
                      r"\W*$", re.I)
 
 
+# Shells and admin tools are never opened unless the owner put them on the allowlist (red-team D03: the small
+# model mapped "Open cmd" to the nearest allowed app, File Explorer). Refused before the LLM sees it.
+_ADMIN_TOOLS = re.compile(
+    r"^(?:open|run|start|launch|show)\s+(?:the\s+|a\s+|an\s+)?(?:new\s+)?(?P<name>cmd(?:\.exe)?|command\s+prompt|"
+    r"terminal|windows\s+terminal|power\s*shell|pwsh|bash|wsl|shell|console|regedit|registry(?:\s+editor)?|"
+    r"task\s+scheduler|group\s+policy(?:\s+editor)?|gpedit|services|computer\s+management|"
+    r"device\s+manager|disk\s+management|control\s+panel)(?:\s+(?:app|window|as\s+admin(?:istrator)?))?$", re.I)
+
+
+def forbidden_target(normalized: str, kb: Knowledge) -> str | None:
+    """'Open cmd' -> 'cmd' (refuse), unless that exact name is an allowed app."""
+    text = _EN_TAIL.sub("", _EN_LEAD.sub("", " ".join(normalized.strip().strip(".!?,").split()))).strip(" .!?,")
+    m = _ADMIN_TOOLS.match(text)
+    if m is None:
+        return None
+    name = " ".join(m["name"].lower().split())
+    return None if name.replace(" ", "") in kb.apps or name in kb.apps else name
+
+
 def match_shortcut(normalized: str, kb: Knowledge) -> ToolCall | None:
     text = " ".join(normalized.strip().strip(".!?,").split())
     text = _EN_TAIL.sub("", _EN_LEAD.sub("", text)).strip(" .!?,")

@@ -34,7 +34,7 @@ from .i18n import YES_WORDS, Messages, is_english
 from .jobs import Job, JobState, new_job_id
 from .knowledge import Knowledge
 from .policy import PolicyContext, RateLimiter, decide
-from .shortcuts import match_shortcut
+from .shortcuts import forbidden_target, match_shortcut
 from .summary import coding_report, deny_message, summarize
 from .wake import DEFAULT_WAKE_WORDS, wake_filter
 from .wol import send_magic_packet
@@ -354,6 +354,11 @@ class Orchestrator:
                 await self._fail(job, self.t("only_english"), "rejected_language")
                 return
             job.normalized = self.normalize(job.text)
+        if (blocked := forbidden_target(job.normalized, self.kb)) is not None:
+            await self._move(job, S.PLANNING)
+            job.planner = "rule"
+            await self._fail(job, f"I can't open {blocked}: shells and system admin tools are not allowed.", "refused")
+            return
         if job.flow is None and (flow := flow_trigger(job.normalized)) is not None:
             # "YouTube", "open Cursor": the phone opens that app's wizard; nothing is sent to PC2
             await self._move(job, S.PLANNING)

@@ -123,7 +123,7 @@ the hardware decisions in chapter 13 (see "Open questions" below).
 - [x] Live E2E through PC1 relay: search → open result → tabs → play → pause → close tab
 - [x] **Tab reuse:** searching never opens a new tab when a search tab is already open (`choose_tab()`, 9 unit cases + 5 agent tests + live real-Chrome test: 3 searches = 1 tab; + YouTube = 2 tabs). Search never overwrites a page the user opened. Old `search_web` (new tab in the user's Chrome per search) disabled
 - [x] **Bugs fixed (seen live):** (1) agent Chrome ran with `--no-sandbox` (Playwright default) → `chromium_sandbox=True`, verified 0 processes with the flag; (2) a YouTube search reused the playing tab and stopped the music → separate player/results tabs (`choose_youtube_tab()`), live test: music keeps playing through searches, one player only; (3) `TargetClosedError` after the agent window was closed → relaunch + retry once
-- [x] Google blocks automated browsers with a CAPTCHA (even headed) → web search reads **Bing**; "search X on google" runs there too and says "(Bing)"
+- [x] Google blocks automated browsers with a CAPTCHA (even headed) → web search read **Bing** (superseded by the Chrome extension in the app-flows redesign: Google in the user's own Chrome)
 - [x] **"What can I say?" guide**: `GET /capabilities` (apps/sites from knowledge) → PWA "All commands…" with 38 tap-to-run examples, allowed lists, refused list; voice "help"/"what can I say". Test parses every example and checks the policy allows it
 - [ ] US-302 read & summarise a page with the LLM (untrusted content handling)
 - [ ] US-603 confirm card UI for risk-3 tools (backend done in Phase 1) + first risk-3 tool
@@ -131,9 +131,26 @@ the hardware decisions in chapter 13 (see "Open questions" below).
 - [ ] Spotify: specific song/playlist needs Spotify Web API (Premium for playback) — Spotify not installed on PC2 yet
 - [ ] US-606 secrets canary test, US-608 red-team ≥ 30 prompt-injection cases, US-703 KPI dashboard → Gate G2
 
-## Later phases — not started
-- [ ] Phase 3 (S7–S10): coding agent on git branches, run_tests, diff/revert on phone, multi-step ReAct, PC2 hotkey/tray kill switch, audit export, Gate G3
-- [ ] Phase 4 (S11–S14): wake word/VAD, voice "หยุดก่อน", Thai TTS, Wake-on-LAN, vision, final audit, (SIP), Gate G4
+## Phase 3 (S7–S10) — done (Gate G3: 80 % on 10 hidden-check code tasks, revert 100 %, main untouched 100 %)
+- [x] Coding tools on PC2 (list/read/search/git_status/edit/run_tests/diff/revert/open_project), ai/* branch + checkpoint commits, never touches uncommitted user work
+- [x] Multi-step coding loop on PC1, honest "Not finished" report, phone diff/tests/revert panel
+- [x] PC2 hotkey kill switch (Ctrl+Alt+Shift+K), audit export (`vpc-cli export-audit`, `GET /audit/export`, Settings download)
+
+## Phase 4 (S11–S14) — in progress
+- [x] Wake word + hands-free (30/30, 0 false accepts), spoken Stop, TTS replies, vision `look_at_screen`, Wake-on-LAN (awake path tested)
+- [x] Red-team 35 cases: 32 blocked. **Fixed (2026-10-12):** I03/I07 — an AI edit adding process/network/secret/dynamic-code access or touching build/test config now needs the owner's approval (PC1 asks with the reason; PC2 denies without the approval hash), before any test runs
+- [x] D03 ("Open cmd" opened Explorer): shells and admin tools are refused by rule before the LLM, unless allowlisted
+- [ ] Re-run the red-team set live after the fixes
+- [ ] 8-hour soak on PC1 (running), TC-S09 kill switch with PC1 cut, real WoL from sleep, final security audit, Gate G4 write-up
+
+## App flows redesign (design doc approved 2026-10-12)
+- [x] Step 1 — flow engine on PC1 (`app/core/flows.py`, `GET /flows`, `POST /flows/{id}/run|control`, text-only `POST /stt`), Apps tab with wizard screens, voice answers ("the second one"), remember-last-used, "open YouTube"/"open Cursor" opens the wizard
+- [x] Step 2a — Voice PC Chrome extension (`pc2-extension/`, `docs/chrome-extension.md`) driving the user's own Chrome; verified live: YouTube search + play (playing), CAPTCHA reported, non-https refused
+- [ ] Step 2b — owner loads the extension on PC2, phone checkpoint (YouTube + search); then remove the Playwright browser
+- [ ] Step 3 — Cursor flow (needs `agent login`); spike: `-p` has shell access, gated only by `--force` / `.cursor/cli.json` allow-deny → deny-by-default + approve + `--resume`
+- [ ] Step 4 — social (FB, IG, X, TikTok) with approval cards and hourly limit
+- [ ] Step 5 — Office, Steam, OBS
+- [ ] Step 6 — polish, archify onboarding guide, Phase 4 wrap-up
 
 ## Open questions (chapter 13) — needed before real deployment
 1. PC1: GPU/VRAM and which VM/LXC on Proxmox? (This dev machine shows a GTX 1650 4 GB → §11.1 suggests Whisper small/medium int8 + a ~3–4B 4-bit LLM, loaded alternately.)

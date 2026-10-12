@@ -111,7 +111,7 @@ async def test_english_deny_message(rig_factory):
     from app.adapters.fakes import ScriptedLLM
     rig = rig_factory(language="en")
     rig.llm.script = [ScriptedLLM.tool("open_app", app="regedit")]
-    job = await rig.run_text("start the registry editor")
+    job = await rig.run_text("I need to tweak some registry values")  # "open regedit" is refused by rule first
     assert job.summary == "This app is not on the allowed list"
 
 
