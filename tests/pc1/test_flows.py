@@ -70,7 +70,7 @@ def test_every_control_parses(kb, rig):
     ("youtube", {"what": "dance"}, "choose"),
     ("youtube", {"what": "play", "query": "   "}, "needs an answer"),
     ("code", {"what": "change", "project": "secret-repo", "request": "x"}, "choose"),
-    ("code", {"what": "new", "project": "demo"}, "choose"),  # not available until build step 3
+    ("code", {"what": "ask", "project": "demo"}, "choose"),  # needs Cursor (build step 3)
     ("music", {"app": "tiktok", "query": "x"}, "choose"),
     ("apps", {"app": "regedit"}, "choose"),
     ("facebook", {}, "unknown flow"),
@@ -153,3 +153,61 @@ async def test_shells_and_admin_tools_are_refused_without_the_llm(rig, text):
 def test_ordinary_commands_are_not_blocked(kb, text):
     from app.core.shortcuts import forbidden_target
     assert forbidden_target(text, kb) is None
+
+
+# ------------------------------------------------------------------ projects: confirm once, new project
+FOUND = [{"name": "portfolio", "label": "Portfolio", "path": "C:/Users/me/Desktop/Portfolio"}]
+
+
+async def _approve(rig, job):
+    from voice_contracts.models import ToolResult
+    for t in ("register_project", "create_project"):
+        rig.pc2.handlers[t] = lambda a: ToolResult(ok=True, verified=True, data={"project": a["name"]})
+    await rig.orch.wait_idle()
+    job = rig.orch.get_job(job.id)
+    assert job.state == S.AWAITING_CONFIRM and job.planner == "flow"
+    await rig.orch.confirm(job.id, True, job.pending["args_hash"], "phone")
+    await rig.orch.wait_idle()
+    return rig.orch.get_job(job.id)
+
+
+async def test_found_repo_is_registered_once_with_approval_and_the_path_from_pc2(rig):
+    rig.orch.pc2_status = {"found_projects": FOUND}
+    code = next(f for f in rig.orch.flows() if f["id"] == "code")
+    project = next(s for s in code["stages"] if s["id"] == "project")
+    assert [o["value"] for o in project["options"]] == ["demo", "repo:portfolio"]
+    job = await rig.orch.run_flow("code", {"what": "open", "project": "repo:portfolio",
+                                           "project_path": "C:/Windows"}, "phone")  # phone path ignored
+    job = await _approve(rig, job)
+    call = rig.pc2.calls[-1]
+    assert job.state == S.DONE and call["tool"] == "register_project"
+    assert call["arguments"] == {"name": "portfolio", "path": FOUND[0]["path"]} and call["approved_hash"]
+
+
+async def test_new_project_is_created_with_approval(rig):
+    job = await rig.orch.run_flow("code", {"what": "new", "name": "Todo App!", "description": "a todo app"}, "phone")
+    job = await _approve(rig, job)
+    assert rig.pc2.calls[-1]["tool"] == "create_project"
+    assert rig.pc2.calls[-1]["arguments"] == {"name": "todo-app", "description": "a todo app"}
+    assert job.text.startswith("Create a new project “todo-app”")
+
+
+def test_new_project_name_must_be_new_and_valid(kb):
+    for bad in ("demo", "!!!"):
+        with pytest.raises(FlowError, match="different project name"):
+            resolve("code", {"what": "new", "name": bad, "description": "x"}, kb)
+
+
+async def test_the_model_can_never_register_or_create_projects(rig):
+    from app.ports import PlanResult
+    from voice_contracts.models import ToolCall
+    bad = ToolCall(tool="register_project", arguments={"name": "x", "path": "C:/Users/me/secret"})
+    rig.llm.script = [PlanResult(kind="tool_call", call=bad)]
+    job = await rig.run_text("let the ai work on my secret folder")
+    assert job.state == S.FAILED and job.outcome == "denied" and rig.pc2.calls == []
+
+
+async def test_heartbeat_learns_projects_registered_on_pc2(rig):
+    rig.pc2.status_extra = {"projects": ["demo", "portfolio", "../bad"]}
+    await rig.orch.heartbeat()
+    assert "portfolio" in rig.orch.kb.projects and "../bad" not in rig.orch.kb.projects

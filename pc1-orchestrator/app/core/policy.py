@@ -45,6 +45,7 @@ class PolicyContext:
     rate: RateLimiter = field(default_factory=RateLimiter)
     kill_switch: bool = False
     tainted: bool = False
+    from_flow: bool = False  # the exact call a phone wizard asked for (wizard-only tools are allowed)
 
 
 def _deny(reason: str, risk: int = 0) -> Decision:
@@ -55,6 +56,8 @@ def decide(call: ToolCall, ctx: PolicyContext) -> Decision:
     spec = TOOLS.get(call.tool)
     if spec is None or not spec.enabled:
         return _deny("unknown tool")
+    if not spec.llm and not ctx.from_flow:  # e.g. register_project: never on the model's say-so
+        return _deny("wizard-only tool", spec.risk)
     try:
         args = spec.args.model_validate(call.arguments).model_dump()
     except ValidationError as e:

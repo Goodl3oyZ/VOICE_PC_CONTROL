@@ -159,6 +159,12 @@ def summarize(tool: str, args: dict[str, Any], result: ToolResult, kb: Knowledge
             return t["no_matches"].format(query=args["query"])
         return t["matches"].format(n=len(m), query=args["query"],
                                    items=" · ".join(f"{x['file']}:{x['line']}" for x in m[:5]))
+    if tool == "register_project":  # English-only wizard flows (redesign step 3)
+        return f"The AI can now work on “{d.get('project')}”. Open Apps → Code and pick it."
+    if tool == "create_project":
+        return f"Created the project “{d.get('project')}” at {d.get('path')}. Open Apps → Code to work on it."
+    if tool == "find_projects":
+        return f"{len(d.get('found') or [])} git repo(s) found that are not registered yet"
     if tool == "git_status":
         return t["git_status"].format(project=args["project"], branch=d.get("branch"),
                                       n=len(d.get("changed") or []))

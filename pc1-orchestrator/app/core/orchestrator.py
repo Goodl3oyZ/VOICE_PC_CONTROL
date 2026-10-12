@@ -7,13 +7,14 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import re
 import time
 from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
 
 from voice_contracts.models import ToolCall, ToolResult
-from voice_contracts.tools import TOOLS, llm_tool_schemas
+from voice_contracts.tools import NAME_PATTERN, TOOLS, llm_tool_schemas
 
 from ..ports import (
     AuditWriteError,
@@ -39,6 +40,7 @@ from .summary import coding_report, deny_message, summarize
 from .wake import DEFAULT_WAKE_WORDS, wake_filter
 from .wol import send_magic_packet
 
+PROJECT_NAME = re.compile(NAME_PATTERN)
 log = logging.getLogger("pc1.orchestrator")
 S = JobState
 
@@ -100,23 +102,32 @@ class Orchestrator:
         self._breaker_until = 0.0
 
     # ------------------------------------------------------------------ public use cases
-    async def submit_text(self, text: str, device: str, flow: str | None = None) -> Job:
+    async def submit_text(self, text: str, device: str, flow: str | None = None,
+                          preset: ToolCall | None = None) -> Job:
         text = text.strip()
         if not text:
             raise ValueError("empty command")
         job = Job(id=new_job_id(self.clock()), device=device, source="text", text=text[:1000],
-                  created_at=self.clock(), updated_at=self.clock(), flow=flow)
+                  created_at=self.clock(), updated_at=self.clock(), flow=flow,
+                  preset=preset.model_dump() if preset else None)
         return await self._start(job)
 
     def flows(self) -> list[dict[str, Any]]:
-        return public_flows(self.kb, self.store.get_setting)
+        return public_flows(self.kb, self.store.get_setting, self._found_projects())
+
+    def _found_projects(self) -> list[dict[str, str]]:
+        found = self.pc2_status.get("found_projects") or []
+        return [f for f in found if isinstance(f, dict) and isinstance(f.get("name"), str)
+                and isinstance(f.get("path"), str)]
 
     async def run_flow(self, flow_id: str, answers: dict[str, str], device: str) -> Job | None:
         """A finished wizard: checked answers -> an ordinary command (same policy/approval/audit path).
         None when the flow only opens its controls (e.g. "Control what's playing")."""
-        command, remember = resolve(flow_id, answers, self.kb)
+        command, remember = resolve(flow_id, answers, self.kb, self._found_projects())
         for key, value in remember.items():  # "remember last used" (e.g. the music app)
             self.store.set_setting(key, value)
+        if isinstance(command, ToolCall):  # wizard-only tool (register/create a project): exact call, no LLM
+            return await self.submit_text(command.rationale, device, flow=flow_id, preset=command)
         return None if command is None else await self.submit_text(command, device, flow=flow_id)
 
     async def run_flow_control(self, flow_id: str, index: int, answers: dict[str, str], device: str) -> Job:
@@ -257,6 +268,9 @@ class Orchestrator:
             if res.ok:
                 self.pc2_last_seen = self.clock()
                 self.pc2_status = res.data
+                for name in res.data.get("projects") or []:  # registered on PC2 (also from the phone wizard)
+                    if isinstance(name, str) and PROJECT_NAME.match(name):
+                        self.kb.projects.setdefault(name, {"display": name})
         except (PC2Unavailable, TimeoutError):
             pass
         online = self.pc2_online
@@ -354,12 +368,12 @@ class Orchestrator:
                 await self._fail(job, self.t("only_english"), "rejected_language")
                 return
             job.normalized = self.normalize(job.text)
-        if (blocked := forbidden_target(job.normalized, self.kb)) is not None:
+        if job.preset is None and (blocked := forbidden_target(job.normalized, self.kb)) is not None:
             await self._move(job, S.PLANNING)
             job.planner = "rule"
             await self._fail(job, f"I can't open {blocked}: shells and system admin tools are not allowed.", "refused")
             return
-        if job.flow is None and (flow := flow_trigger(job.normalized)) is not None:
+        if job.preset is None and job.flow is None and (flow := flow_trigger(job.normalized)) is not None:
             # "YouTube", "open Cursor": the phone opens that app's wizard; nothing is sent to PC2
             await self._move(job, S.PLANNING)
             job.planner, job.flow = "flow", flow
@@ -429,7 +443,9 @@ class Orchestrator:
             # The rate limit counts commands; later steps of an admitted coding job are bounded by
             # coding_max_steps and the loop guard instead.
             rate = self.rate if not (job.steps and _is_coding(job)) else RateLimiter(limit=1_000_000)
-            ctx = PolicyContext(self.kb, rate, bool(self.pc2_status.get("kill_switch")), job.tainted)
+            ctx = PolicyContext(self.kb, rate, bool(self.pc2_status.get("kill_switch")), job.tainted,
+                                from_flow=job.planner == "flow" and job.preset is not None
+                                and call.tool == job.preset.get("tool"))
             decision = decide(call, ctx)
             self._event(job, "route", decision.decision, t0, tool=call.tool, risk=decision.risk)
             self._audit("route", job, {"tool": call.tool, "arguments": call.arguments,
@@ -456,7 +472,7 @@ class Orchestrator:
                                      approved=False)
             if not ok:
                 return
-            if job.planner == "shortcut" or not (self.cfg.multi_step or _is_coding(job)):
+            if job.planner in ("shortcut", "flow") or not (self.cfg.multi_step or _is_coding(job)):
                 await self._done(job)
                 return
             if _is_coding(job) and job.id in self._deadlines:  # coding: think -> act -> observe loop
@@ -468,6 +484,9 @@ class Orchestrator:
         await self._fail(job, self.t("max_steps"))
 
     async def _plan(self, job: Job) -> PlanResult:
+        if not job.steps and job.preset is not None:
+            job.planner = "flow"
+            return PlanResult(kind="tool_call", call=ToolCall.model_validate(job.preset))
         if not job.steps:
             shortcut = match_shortcut(job.normalized, self.kb)
             if shortcut is not None:

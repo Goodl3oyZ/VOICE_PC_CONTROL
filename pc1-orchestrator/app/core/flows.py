@@ -12,7 +12,12 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any
 
+from voice_contracts.models import ToolCall
+from voice_contracts.tools import NAME_PATTERN
+
 from .knowledge import Knowledge
+
+Found = list[dict[str, str]] | tuple[()]  # git repos PC2 found that are not registered yet
 
 
 class FlowError(ValueError):
@@ -37,6 +42,7 @@ class Stage:
     when: tuple[str, tuple[str, ...]] | None = None  # shown only if answers[stage] is one of these
     placeholder: str = ""
     remember: str = ""  # settings key: the last answer is the default next time ("Using YouTube · change")
+    slug: bool = False  # text answer becomes a project name ("Todo App" -> "todo-app")
 
 
 @dataclass(frozen=True)
@@ -53,7 +59,7 @@ class Flow:
     icon: str
     group: str
     stages: tuple[Stage, ...] = ()
-    build: Callable[[dict[str, str]], str | None] | None = None
+    build: Callable[[dict[str, str]], str | ToolCall | None] | None = None
     controls: tuple[Control, ...] = ()
     pick_results: bool = False  # after a search, the phone lists the results to open
     available: bool = True
@@ -78,7 +84,14 @@ def _youtube(a: dict[str, str]) -> str | None:
     return f"play {_q(a)}" if a["what"] == "play" else f"search {_q(a)} on youtube"
 
 
-def _code(a: dict[str, str]) -> str:
+def _code(a: dict[str, str]) -> str | ToolCall:
+    if a["what"] == "new":
+        return ToolCall(tool="create_project", arguments={"name": a["name"], "description": a["description"]},
+                        rationale=f"Create a new project “{a['name']}”: {a['description']}")
+    if a["project"].startswith("repo:"):  # found on PC2, not registered: approve once, then pick it again
+        name = a["project"][5:]
+        return ToolCall(tool="register_project", arguments={"name": name, "path": a["project_path"]},
+                        rationale=f"Let the AI work on the project “{name}”")
     if a["what"] == "open":
         return f"open project {a['project']}"
     return f"in the {a['project']} project {a['request']}"
@@ -114,11 +127,16 @@ FLOWS: dict[str, Flow] = {f.id: f for f in [
              Stage("what", "choice", "What for?", (
                  Option("change", "Change or add code", "The AI edits on an ai/… branch, then runs the tests"),
                  Option("open", "Just open it", "Opens the project in Cursor"),
-                 Option("ask", "Ask about the code", "With Cursor's agent (build step 3)", available=False),
-                 Option("new", "Start a new project", "With Cursor's agent (build step 3)", available=False))),
-             Stage("project", "choice", "Which project?", source="projects", remember="last_project"),
+                 Option("ask", "Ask about the code", "With Cursor's agent (needs Cursor login)", available=False),
+                 Option("new", "Start a new project", "A new folder with git under your Projects folder"))),
+             Stage("project", "choice", "Which project?", source="projects", remember="last_project",
+                   when=("what", ("change", "open"))),
              Stage("request", "text", "What should change?", when=("what", ("change",)),
                    placeholder="add a function that…"),
+             Stage("name", "text", "Name the new project", when=("what", ("new",)), placeholder="todo-app",
+                   slug=True),
+             Stage("description", "text", "Describe it in one sentence", when=("what", ("new",)),
+                   placeholder="a todo app in React with dark mode"),
          ),
          build=_code,
          controls=(Control("Show the changes", "show the diff for {project}"),
@@ -146,21 +164,24 @@ FLOWS: dict[str, Flow] = {f.id: f for f in [
 ]}
 
 
-def _options(stage: Stage, kb: Knowledge) -> list[Option]:
+def _options(stage: Stage, kb: Knowledge, found: Found = ()) -> list[Option]:
     if stage.source == "projects":
-        return [Option(p, str(v.get("display", p)) if isinstance(v, dict) else p) for p, v in kb.projects.items()]
+        mine = [Option(p, str(v.get("display", p)) if isinstance(v, dict) else p) for p, v in kb.projects.items()]
+        return mine + [Option(f"repo:{f['name']}", f.get("label") or f["name"],
+                              "Found on the PC · you approve once, then pick it again")
+                       for f in found if f["name"] not in kb.projects]
     if stage.source == "apps":
         return [Option(a, kb.display(a, "en")) for a in kb.apps]
     return list(stage.options)
 
 
-def public_flows(kb: Knowledge, settings: Callable[[str], str | None]) -> list[dict[str, Any]]:
+def public_flows(kb: Knowledge, settings: Callable[[str], str | None], found: Found = ()) -> list[dict[str, Any]]:
     """What the phone draws: tiles, stages with their options, defaults remembered from last time."""
     out = []
     for f in FLOWS.values():
         stages = []
         for s in f.stages:
-            opts = _options(s, kb)
+            opts = _options(s, kb, found)
             default = settings(f"flow.{s.remember}") if s.remember else None
             if default not in {o.value for o in opts if o.available}:
                 default = None
@@ -179,7 +200,8 @@ def _active(stage: Stage, answers: dict[str, str]) -> bool:
     return stage.when is None or answers.get(stage.when[0]) in stage.when[1]
 
 
-def resolve(flow_id: str, answers: dict[str, str], kb: Knowledge) -> tuple[str | None, dict[str, str]]:
+def resolve(flow_id: str, answers: dict[str, str], kb: Knowledge,
+            found: Found = ()) -> tuple[str | ToolCall | None, dict[str, str]]:
     """Check the answers and build the command sentence. Returns (command or None, values to remember)."""
     f = FLOWS.get(flow_id)
     if f is None or not f.available:
@@ -191,15 +213,21 @@ def resolve(flow_id: str, answers: dict[str, str], kb: Knowledge) -> tuple[str |
             continue
         v = " ".join(str(answers.get(s.id, "")).split())
         if s.kind == "choice":
-            allowed = {o.value for o in _options(s, kb) if o.available}
+            allowed = {o.value for o in _options(s, kb, found) if o.available}
             if v not in allowed:
                 raise FlowError(f"choose one of the options for '{s.question}'")
-            if s.remember:
+            if v.startswith("repo:"):  # the path comes from PC2's own scan, never from the phone
+                clean[f"{s.id}_path"] = next(f["path"] for f in found if f["name"] == v[5:])
+            elif s.remember:
                 remember[f"flow.{s.remember}"] = v
         else:
             if not v:
                 raise FlowError(f"'{s.question}' needs an answer")
             v = v[:_QUERY_MAX]
+            if s.slug:
+                v = re.sub(r"[^a-z0-9_\-]+", "-", v.lower()).strip("-_")[:32]
+                if not re.match(NAME_PATTERN, v) or v in kb.projects:
+                    raise FlowError("pick a different project name (letters, digits and -)")
         clean[s.id] = v
     command = f.build(clean) if f.build else None
     return command, remember

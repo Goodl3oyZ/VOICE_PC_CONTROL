@@ -152,6 +152,16 @@ class EditFileArgs(ProjectArgs):
     allow_removing: bool = Field(False, description="Only if the task asks to delete/rename functions or classes")
 
 
+class RegisterProjectArgs(_Args):
+    name: str = Field(pattern=NAME_PATTERN, description="Short project name (lowercase, digits, - and _)")
+    path: str = Field(min_length=3, max_length=260, description="Folder of a git repo found by find_projects")
+
+
+class CreateProjectArgs(_Args):
+    name: str = Field(pattern=NAME_PATTERN, description="New project folder name under the projects root")
+    description: str = Field("", max_length=300, description="One sentence: what the project is")
+
+
 class LookArgs(_Args):
     question: str = Field("What is on the screen?", min_length=2, max_length=200,
                           description="What to find out from the screen")
@@ -165,6 +175,7 @@ class ToolSpec:
     description: str
     phase: int
     enabled: bool = True  # feature flag (§19.6)
+    llm: bool = True  # offered to the planner; False = only app flows (the phone wizard) can request it
 
 
 TOOLS: dict[str, ToolSpec] = {
@@ -210,6 +221,12 @@ TOOLS: dict[str, ToolSpec] = {
         ToolSpec("git_diff", 0, ProjectArgs, "Show what the AI changed compared with the base branch", 3),
         ToolSpec("revert_changes", 2, ProjectArgs,
                  "Undo all AI changes: back to the base branch, delete the ai/* branch", 3),
+        # App flows (redesign step 3): project discovery and confirm-once registration, wizard only.
+        ToolSpec("find_projects", 0, NoArgs, "List git repos found in the owner's folders", 3, llm=False),
+        ToolSpec("register_project", 3, RegisterProjectArgs,
+                 "Let the AI work on an existing git repo (asked once, with approval)", 3, llm=False),
+        ToolSpec("create_project", 3, CreateProjectArgs,
+                 "Create a new project folder with git under the projects root (with approval)", 3, llm=False),
     ]
 }
 
@@ -234,7 +251,7 @@ def llm_tool_schemas(app_enum: list[str], project_enum: list[str] | None = None)
     """OpenAI/Ollama-style function definitions with the app allowlist as an enum (§7.1)."""
     out = []
     for spec in TOOLS.values():
-        if not spec.enabled:
+        if not spec.enabled or not spec.llm:
             continue
         params = spec.args.model_json_schema()
         params.pop("title", None)

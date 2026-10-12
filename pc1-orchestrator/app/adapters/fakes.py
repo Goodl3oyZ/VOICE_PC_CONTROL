@@ -65,6 +65,7 @@ class FakePC2:
         self.stopped = 0
         self.kill_switch = False
         self.handlers: dict[str, Callable[[dict[str, Any]], ToolResult]] = {}  # extra tools in tests
+        self.status_extra: dict[str, Any] = {}  # extra heartbeat fields in tests (e.g. projects)
         self._idem: dict[str, ToolResult] = {}
 
     async def call(self, tool: str, arguments: dict[str, Any], idempotency_key: str,
@@ -107,7 +108,7 @@ class FakePC2:
         if self.offline:
             raise PC2Unavailable("connection refused")
         return ToolResult(ok=True, verified=True, data={"running": sorted(self.running),
-                                                         "kill_switch": self.kill_switch})
+                                                         "kill_switch": self.kill_switch, **self.status_extra})
 
 
 class ListNotifier:

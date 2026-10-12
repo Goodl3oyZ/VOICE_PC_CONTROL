@@ -36,6 +36,8 @@ def create_app(cfg: AgentConfig, secret: bytes, launcher: Launcher,
     if len(secret) < 32:
         raise ValueError("agent secret must be at least 32 bytes")
     data_dir = Path(cfg.data_dir)
+    from .tools.projects import load_registered
+    load_registered(cfg)  # projects registered from the phone (confirm once)
     kill = KillSwitch(data_dir / "killswitch.flag")
     policy = AgentPolicy(cfg, kill, clock)
     audit = AuditLog(data_dir / "audit.jsonl")

@@ -80,6 +80,7 @@ class Job:
     timings_ms: dict[str, int] = field(default_factory=dict)
     history: list[dict[str, str]] = field(default_factory=list)  # clarification Q/A
     flow: str | None = None  # app flow this job belongs to (or that a spoken "open YouTube" opens)
+    preset: dict[str, Any] | None = None  # exact tool call from an app flow (wizard-only tools, no LLM)
 
     @property
     def terminal(self) -> bool:

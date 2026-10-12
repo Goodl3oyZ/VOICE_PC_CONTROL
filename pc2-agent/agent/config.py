@@ -27,6 +27,8 @@ class ProjectEntry:
 class AgentConfig:
     apps: dict[str, AppEntry] = field(default_factory=dict)
     projects: dict[str, ProjectEntry] = field(default_factory=dict)  # Phase 3 coding
+    projects_root: str = "%USERPROFILE%/Projects"  # where "Start a new project" creates folders
+    project_scan_roots: list[str] = field(default_factory=list)  # where to look for git repos; [] = home folders
     tests_timeout_s: float = 120.0
     browser_argv: list[str] = field(default_factory=list)  # URL is appended as one argv element
     browser_process: str = "chrome.exe"
