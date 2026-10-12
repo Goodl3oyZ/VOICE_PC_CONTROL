@@ -176,3 +176,11 @@ def test_llm_schema_has_allowlist_enum():
     schemas = {s["function"]["name"]: s for s in llm_tool_schemas(["chrome", "notepad"])}
     app = schemas["open_app"]["function"]["parameters"]["properties"]["app"]
     assert app["enum"] == ["chrome", "notepad"]
+
+
+
+def test_whisper_repetition_is_collapsed():
+    from app.adapters.faster_whisper_stt import collapse_repeats
+    assert collapse_repeats("Skip ad, skip ad, skip ad.") == "Skip ad."
+    assert collapse_repeats("pause the music, " * 40 + "pause the music") == "pause the music."
+    assert collapse_repeats("Open Chrome. Play lofi.") == "Open Chrome. Play lofi."

@@ -17,6 +17,22 @@ from .core.knowledge import Knowledge
 from .core.orchestrator import Orchestrator, OrchestratorConfig
 from .settings import Settings
 
+STT_WORDS = ("Play lofi, skip ad, next song, pause the music, volume up 20 percent, mute, search for, open result "
+             "two, close this tab, what tabs are open, start recording, stop recording, start streaming, show the "
+             "diff, run the tests, revert the changes, wake up the PC, stop everything, what's on the screen.")
+
+
+def stt_prompt(kb: Knowledge) -> str:
+    """Whisper prompt: the owner's apps, sites and projects plus the command words (keeps names spelled right)."""
+    names = ["YouTube", "TikTok", "Facebook", "Instagram", "X", "Cursor", "Word", "Excel", "PowerPoint", "Steam",
+             "OBS", "Google", "GitHub", "Gmail"]  # brand spellings first: they win over "Youtube"
+    names += [kb.display(a, "en") for a in kb.apps] + [s.title() for s in kb.sites] + list(kb.projects)
+    seen: list[str] = []
+    for n in names:
+        if n and n.lower() not in {x.lower() for x in seen}:
+            seen.append(n)
+    return "Voice commands for a PC: open " + ", ".join(seen)[:500] + ". " + STT_WORDS
+
 
 def build(settings: Settings | None = None) -> FastAPI:
     s = settings or Settings()
@@ -27,10 +43,13 @@ def build(settings: Settings | None = None) -> FastAPI:
 
     if s.stt == "faster_whisper":
         from .adapters.faster_whisper_stt import FasterWhisperSTT
-        prompt = " ".join(kb.display(a) for a in kb.apps)
-        # English mode: auto-detect, so non-English speech comes out in its own script and is rejected
+        # English mode: the language is FIXED to English. Auto-detect heard accented English as another language
+        # and mangled the words (owner feedback 2026-10-12; benchmark in eval/stt_bench.py). The prompt biases
+        # Whisper toward the words commands actually use.
         stt = FasterWhisperSTT(s.whisper_model, device=s.stt_device, compute_type=s.whisper_compute,
-                               language=None if s.language == "en" else "th", initial_prompt=prompt)
+                               language="en" if s.language == "en" else "th",
+                               initial_prompt=stt_prompt(kb) if s.language == "en" else
+                               " ".join(kb.display(a) for a in kb.apps))
         stt.warm_up()  # load once at startup, not on the first command (§14.5 keep-warm)
     else:
         stt = FakeSTT("เปิดโน้ตแพด")

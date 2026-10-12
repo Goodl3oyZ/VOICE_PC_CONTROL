@@ -9,6 +9,7 @@ from __future__ import annotations
 import asyncio
 import io
 import math
+import re
 import threading
 from typing import Any
 
@@ -43,6 +44,14 @@ def decode_audio(data: bytes) -> Any:
     return np.concatenate(chunks).astype(np.float32) / 32768.0
 
 
+def collapse_repeats(text: str) -> str:
+    """'Skip ad, skip ad, skip ad.' -> 'Skip ad.' (a Whisper hallucination on short clips)."""
+    parts = [p.strip() for p in re.split(r"(?<=[,.!?])\s+", text) if p.strip()]
+    if len(parts) >= 2 and len({re.sub(r"[^a-z0-9 ]", "", p.lower()) for p in parts}) == 1:
+        return parts[0].rstrip(",") + ("." if not parts[0].rstrip(",").endswith((".", "!", "?")) else "")
+    return text[:500]
+
+
 class FasterWhisperSTT:
     def __init__(self, model: str = "small", device: str = "auto", compute_type: str = "int8",
                  language: str | None = "th", initial_prompt: str | None = None):
@@ -69,13 +78,15 @@ class FasterWhisperSTT:
         samples = decode_audio(audio)
         if samples.size < SAMPLE_RATE // 10:  # < 0.1 s: nothing to transcribe
             return Transcript(text="", confidence=0.0)
-        segments, info = model.transcribe(samples, language=self.language, vad_filter=True,
-                                          beam_size=5, initial_prompt=self.initial_prompt)
+        # condition_on_previous_text=False: short commands; avoids the "pause the music, pause the music, ..."
+        # repetition loop seen in the 2026-10-12 benchmark
+        segments, info = model.transcribe(samples, language=self.language, vad_filter=True, beam_size=5,
+                                          initial_prompt=self.initial_prompt, condition_on_previous_text=False)
         texts, logprobs = [], []
         for seg in segments:
             texts.append(seg.text)
             logprobs.append(seg.avg_logprob)
-        text = "".join(texts).strip()
+        text = collapse_repeats("".join(texts).strip())
         conf = math.exp(sum(logprobs) / len(logprobs)) if logprobs else 0.0
         return Transcript(text=text, confidence=round(conf, 3), lang=info.language)
 
