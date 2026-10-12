@@ -349,3 +349,18 @@ def test_steam_lists_installed_games_from_pc2(kb):
 
 def test_voice_starts_the_new_flows():
     assert flow_trigger("open OBS") == "obs" and flow_trigger("Word") == "office" and flow_trigger("steam") == "steam"
+
+
+
+def test_step5_summaries_say_what_happened(kb):
+    from app.core.summary import summarize
+    from voice_contracts.models import ToolResult
+    r = lambda **d: ToolResult(ok=True, verified=True, data=d)  # noqa: E731
+    rec = r(recording=True, record_time="00:00:03.100", streaming=False, scene="Scene")
+    want = "Recording started · recording 00:00:03 · scene “Scene”"
+    assert summarize("obs_control", {"action": "start_recording"}, rec, kb, "en") == want
+    assert summarize("word_edit", {"action": "read_last_paragraph"}, r(action="read_last_paragraph", text="Hi."),
+                     kb, "en") == "Last paragraph: “Hi.”"
+    closed = r(app="word", mode="close_discard", file="Document1")
+    want = "Closed Document1 without saving"
+    assert summarize("office_finish", {"app": "word", "mode": "close_discard"}, closed, kb, "en") == want

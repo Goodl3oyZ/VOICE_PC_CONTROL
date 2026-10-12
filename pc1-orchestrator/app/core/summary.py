@@ -159,6 +159,36 @@ def summarize(tool: str, args: dict[str, Any], result: ToolResult, kb: Knowledge
             return t["no_matches"].format(query=args["query"])
         return t["matches"].format(n=len(m), query=args["query"],
                                    items=" · ".join(f"{x['file']}:{x['line']}" for x in m[:5]))
+    if tool in ("obs_control", "obs_start_stream"):  # step 5
+        act = args.get("action", "start_streaming")
+        state = []
+        if d.get("recording"):
+            state.append(f"recording {str(d.get('record_time', ''))[:8]}".strip())
+        if d.get("streaming"):
+            state.append(f"LIVE {str(d.get('stream_time', ''))[:8]}".strip())
+        now = ", ".join(state) or "not recording or streaming"
+        done = {"start_recording": "Recording started", "stop_recording": "Recording stopped",
+                "stop_streaming": "Stream stopped", "start_streaming": "Stream started: you are live",
+                "set_scene": f"Switched to scene “{d.get('scene', '')}”", "status": "OBS"}[act]
+        return f"{done} · {now} · scene “{d.get('scene', '')}”"
+    if tool == "office_open":
+        app = {"word": "Word", "excel": "Excel", "powerpoint": "PowerPoint"}.get(str(d.get("app")), "Office")
+        return f"Opened {d.get('file')} in {app}" + (" (new)" if d.get("new") else "")
+    if tool == "word_type":
+        return f"Typed into {d.get('file')}"
+    if tool == "word_edit":
+        a = d.get("action")
+        if a == "read_last_paragraph":
+            return f"Last paragraph: “{d.get('text', '')}”"
+        if a == "delete_last_sentence":
+            return f"Deleted: “{d.get('deleted', '')}”"
+        return {"new_paragraph": "New paragraph", "undo": "Undone"}.get(str(a), "Done")
+    if tool == "office_save_copy":
+        return f"Saved a copy: {str(d.get('saved_as', '')).replace(chr(92), '/').split('/')[-1]}"
+    if tool == "office_finish":
+        return f"Saved {d.get('file')}" if d.get("mode") == "save" else f"Closed {d.get('file')} without saving"
+    if tool == "steam_launch":
+        return f"Starting {d.get('game')} in Steam"
     if tool == "youtube_skip_ad":
         if d.get("skipped"):
             return "Skipped the ad"
