@@ -100,6 +100,7 @@ class Orchestrator:
         self._pc2_was_online: bool | None = None
         self._failures = 0
         self._breaker_until = 0.0
+        self._stt_lock = asyncio.Lock()  # /stt: one wizard voice answer at a time
 
     # ------------------------------------------------------------------ public use cases
     async def submit_text(self, text: str, device: str, flow: str | None = None,
@@ -134,8 +135,12 @@ class Orchestrator:
         return await self.submit_text(control_command(flow_id, index, answers, self.kb), device, flow=flow_id)
 
     async def transcribe(self, audio: bytes, mime: str) -> str:
-        """Voice answer to a wizard stage: text only, no job, nothing stored (like ignored hands-free speech)."""
-        tr = await asyncio.wait_for(self.stt.transcribe(audio, mime), self.cfg.stt_timeout_s)
+        """Voice answer to a wizard stage: text only, no job, nothing stored (like ignored hands-free speech).
+        One at a time: speech recognition is the heaviest thing PC1 does."""
+        if self._stt_lock.locked():
+            raise Conflict("still listening to the previous answer")
+        async with self._stt_lock:
+            tr = await asyncio.wait_for(self.stt.transcribe(audio, mime), self.cfg.stt_timeout_s)
         return tr.text.strip()
 
     async def submit_audio(self, audio: bytes, mime: str, device: str) -> Job:

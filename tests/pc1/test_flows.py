@@ -211,3 +211,11 @@ async def test_heartbeat_learns_projects_registered_on_pc2(rig):
     rig.pc2.status_extra = {"projects": ["demo", "portfolio", "../bad"]}
     await rig.orch.heartbeat()
     assert "portfolio" in rig.orch.kb.projects and "../bad" not in rig.orch.kb.projects
+
+
+def test_flow_answers_are_size_limited(api):
+    client, _, _ = api
+    r = client.post("/flows/search/run", json={"answers": {"query": "x" * 301}})
+    assert r.status_code == 422
+    many = {f"k{i}": "x" for i in range(11)}
+    assert client.post("/flows/search/run", json={"answers": many}).status_code == 422

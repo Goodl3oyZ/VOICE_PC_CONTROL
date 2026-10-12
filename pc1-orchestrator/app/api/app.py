@@ -47,8 +47,11 @@ class ReplyIn(BaseModel):
     text: str = Field(min_length=1, max_length=1000)
 
 
+FlowAnswer = Annotated[str, Field(max_length=300)]
+
+
 class FlowRunIn(BaseModel):
-    answers: dict[str, str] = Field(default_factory=dict, max_length=10)
+    answers: dict[Annotated[str, Field(max_length=40)], FlowAnswer] = Field(default_factory=dict, max_length=10)
 
 
 class FlowControlIn(FlowRunIn):

@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Voice PC",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Lets the Voice PC agent on this computer search, play YouTube and switch tabs in this Chrome. Talks only to the local agent.",
   "minimum_chrome_version": "116",
   "permissions": [

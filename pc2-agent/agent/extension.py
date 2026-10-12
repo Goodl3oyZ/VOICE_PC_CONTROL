@@ -94,6 +94,7 @@ class ExtensionBridge:
         self._ws, self.connected_at, self.version = ws, time.time(), str(hello.get("version", ""))[:20]
         await ws.send(json.dumps({"type": "welcome"}))
         log.info("Chrome extension connected (v%s)", self.version)
+        pinger = asyncio.create_task(self._ping(ws))
         try:
             async for raw in ws:
                 msg = json.loads(raw)
@@ -103,12 +104,20 @@ class ExtensionBridge:
         except Exception as e:  # noqa: BLE001 — a dropped connection is normal (Chrome closed)
             log.info("extension connection ended: %s", type(e).__name__)
         finally:
+            pinger.cancel()
             if self._ws is ws:
                 self._ws = None
                 for f in self._pending.values():
                     if not f.done():
                         f.set_exception(BrowserError(NOT_CONNECTED))
                 self._pending.clear()
+
+    @staticmethod
+    async def _ping(ws: Any, every: float = 10.0) -> None:
+        """App-level ping: messages (not protocol pings) keep Chrome's extension worker from being suspended."""
+        while True:
+            await asyncio.sleep(every)
+            await ws.send('{"type":"ping"}')
 
     async def acall(self, op: str, timeout: float | None = None, **args: Any) -> Any:
         if self._ws is None:

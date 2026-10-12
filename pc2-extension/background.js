@@ -42,8 +42,12 @@ async function connect() {
       retryMs = 2000;
       setState("connected");
       clearInterval(keepalive);
-      // An active WebSocket keeps the MV3 service worker alive (Chrome 116+) while messages flow.
-      keepalive = setInterval(() => sock.readyState === WebSocket.OPEN && sock.send('{"type":"ping"}'), 20000);
+      // Chrome keeps an MV3 worker alive only while its WebSocket carries messages at least every 30 s
+      // (protocol pings do not count). Without an open extension page it was suspended ~20 s after
+      // connecting, so: ping now and every 10 s (the agent also pings every 10 s).
+      const ping = () => sock.readyState === WebSocket.OPEN && sock.send('{"type":"ping"}');
+      ping();
+      keepalive = setInterval(ping, 10000);
       return;
     }
     if (msg.type === "rejected") {
