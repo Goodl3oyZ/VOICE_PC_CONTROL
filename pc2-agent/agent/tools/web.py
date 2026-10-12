@@ -63,5 +63,5 @@ def youtube_skip_ad(args: NoArgs, ctx: ToolContext) -> ToolResult:
     if not hasattr(ctx.browser, "youtube_skip_ad"):
         return ToolResult(ok=False, error="skipping ads needs the Voice PC Chrome extension")
     d = ctx.browser.youtube_skip_ad()
-    # verified: an offered Skip button was pressed, or there was nothing to skip
-    return ToolResult(ok=True, verified=bool(d.get("skipped") or not d.get("ad")), data=d)
+    # verified: the extension reported the ad's real state (skipped / nothing to skip / YouTube offers no Skip)
+    return ToolResult(ok=True, verified=True, data=d)

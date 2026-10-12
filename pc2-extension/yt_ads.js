@@ -1,6 +1,6 @@
 // Voice PC: on YouTube, press YouTube's own "Skip" button as soon as it appears (setting "ytAutoSkip", on by
-// default). Optional "ytMuteAds": mute while an ad plays and restore afterwards. Unskippable ads are NOT
-// fast-forwarded or blocked: only what YouTube itself offers is used.
+// default; background.js sends the real click). Optional "ytMuteAds": mute while an ad plays and restore
+// afterwards. Unskippable ads are NOT fast-forwarded or blocked: only what YouTube itself offers is used.
 (() => {
   const SKIP = ".ytp-skip-ad-button, .ytp-ad-skip-button, .ytp-ad-skip-button-modern, button[id^='skip-button']";
   let opts = { ytAutoSkip: true, ytMuteAds: false };
@@ -21,7 +21,11 @@
     const video = document.querySelector("video");
     if (ad && opts.ytAutoSkip) {
       const b = [...document.querySelectorAll(SKIP)].find((el) => el.getClientRects().length > 0);
-      if (b) b.click();
+      if (b) {
+        // YouTube ignores script clicks (isTrusted=false), so the extension's worker sends a real click there.
+        const r = b.getBoundingClientRect();
+        chrome.runtime.sendMessage({ type: "yt.skip", x: r.left + r.width / 2, y: r.top + r.height / 2 }).catch(() => {});
+      }
     }
     if (video && opts.ytMuteAds) {
       if (ad && !video.muted) {

@@ -1,14 +1,15 @@
 {
   "manifest_version": 3,
   "name": "Voice PC",
-  "version": "0.2.1",
+  "version": "0.3.0",
   "description": "Lets the Voice PC agent on this computer search, play YouTube, browse social sites and (after your approval on the phone) like, comment, follow, post or message. Talks only to the local agent.",
   "minimum_chrome_version": "116",
   "permissions": [
     "tabs",
     "scripting",
     "storage",
-    "alarms"
+    "alarms",
+    "debugger"
   ],
   "host_permissions": [
     "https://www.google.com/*",

@@ -162,8 +162,10 @@ def summarize(tool: str, args: dict[str, Any], result: ToolResult, kb: Knowledge
     if tool == "youtube_skip_ad":
         if d.get("skipped"):
             return "Skipped the ad"
+        if d.get("ad") and not d.get("skippable"):
+            return "YouTube doesn't offer Skip on this ad, so it has to play"
         if d.get("ad"):
-            return "This ad can't be skipped yet" + (f" (Skip in {d['wait']})" if d.get("wait") else "")
+            return "YouTube hasn't let this ad be skipped yet; it will be skipped as soon as Skip appears"
         return "No ad is playing"
     if tool == "social_open":
         site = "X" if d.get("platform") == "x" else str(d.get("platform", "")).title()

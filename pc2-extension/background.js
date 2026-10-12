@@ -143,7 +143,7 @@ async function handle(op, a) {
       setTimeout(() => chrome.runtime.reload(), 200);
       return { reloading: VERSION };
     case "video.skip_ad":
-      return runInPage(a.tabId, skipAd, []);
+      return skipAdNow(a.tabId);
     case "social.state":
       return runInPage(a.tabId, socialState, []);
     case "social.act": {
@@ -222,19 +222,62 @@ async function videoPlay() {
   return { exists: true, paused: v.paused };
 }
 
-// Press YouTube's own Skip button if it is offered; report how long until it is (never fast-forwards an ad).
-function skipAd() {
-  const player = document.querySelector(".html5-video-player");
-  const ad = !!player && player.classList.contains("ad-showing");
-  if (!ad) return { ad: false, skipped: false };
+// Where is YouTube's own Skip button? It exists from the start of a skippable ad but stays hidden for ~5 s,
+// so wait up to 7 s for it. The click itself is a real (trusted) click sent by trustedClick: YouTube ignores
+// script clicks. Never fast-forwards an ad (unskippable ads are left alone).
+async function findSkip() {
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+  const showing = () => !!document.querySelector(".html5-video-player.ad-showing");
   const sel = ".ytp-skip-ad-button, .ytp-ad-skip-button, .ytp-ad-skip-button-modern, button[id^='skip-button']";
-  const b = [...document.querySelectorAll(sel)].find((el) => el.getClientRects().length > 0);
-  if (b) {
-    b.click();
-    return { ad: true, skipped: true };
+  if (!showing()) return { ad: false };
+  const skippable = !!document.querySelector(sel);
+  for (let t = 0; skippable && t < 7000; t += 250) {
+    if (!showing()) return { ad: false, ended: true };
+    const b = [...document.querySelectorAll(sel)].find((el) => el.getClientRects().length > 0);
+    if (b) {
+      const r = b.getBoundingClientRect();
+      return { ad: true, skippable: true, x: r.left + r.width / 2, y: r.top + r.height / 2 };
+    }
+    await sleep(250);
   }
-  const wait = document.querySelector(".ytp-preview-ad__text, .ytp-ad-preview-text, .ytp-ad-preview-container");
-  return { ad: true, skipped: false, wait: wait ? wait.textContent.trim().slice(0, 20) : "" };
+  return { ad: showing(), skippable };
+}
+
+function adShowing() {
+  return !!document.querySelector(".html5-video-player.ad-showing");
+}
+
+// A real mouse click at (x, y) in a YouTube tab through Chrome's debugger interface (YouTube only, at most every
+// 2 s per tab, detached right away). Chrome shows "Voice PC started debugging this browser" for a moment.
+const lastClick = new Map();
+async function trustedClick(tabId, x, y) {
+  const tab = await chrome.tabs.get(tabId);
+  if (!/^https:\/\/(www\.)?youtube\.com\//.test(tab.url || "")) throw new Error("real clicks are only sent to YouTube");
+  if (!(Number.isFinite(x) && Number.isFinite(y)) || x < 0 || y < 0 || x > 10000 || y > 10000) throw new Error("bad position");
+  const now = Date.now();
+  if (now - (lastClick.get(tabId) || 0) < 2000) return false;
+  lastClick.set(tabId, now);
+  const target = { tabId };
+  await chrome.debugger.attach(target, "1.3");
+  try {
+    for (const type of ["mousePressed", "mouseReleased"]) {
+      await chrome.debugger.sendCommand(target, "Input.dispatchMouseEvent", { type, x, y, button: "left", clickCount: 1 });
+    }
+  } finally {
+    await chrome.debugger.detach(target).catch(() => {});
+  }
+  return true;
+}
+
+async function skipAdNow(tabId) {
+  const f = await runInPage(tabId, findSkip, []);
+  if (!f || !f.ad || !f.skippable || f.x === undefined) return { ad: !!(f && f.ad), skipped: !!(f && f.ended), skippable: !!(f && f.skippable) };
+  await trustedClick(tabId, f.x, f.y);
+  for (let t = 0; t < 2500; t += 250) {
+    await new Promise((r) => setTimeout(r, 250));
+    if (!(await runInPage(tabId, adShowing, []))) return { ad: true, skipped: true, skippable: true };
+  }
+  return { ad: true, skipped: false, skippable: true };
 }
 
 // ------------------------------------------------------------------ social (only after approval on the phone)
@@ -362,7 +405,14 @@ chrome.storage.onChanged.addListener((changes, area) => {
   ws = null;
   connect();
 });
-chrome.runtime.onMessage.addListener((msg, _sender, reply) => {
+chrome.runtime.onMessage.addListener((msg, sender, reply) => {
+  if (msg && msg.type === "yt.skip" && sender.tab && sender.id === chrome.runtime.id) {
+    // From our own content script on a YouTube tab (pages cannot send these messages).
+    chrome.storage.local.get("ytAutoSkip").then((s) => {
+      if (s.ytAutoSkip !== false) trustedClick(sender.tab.id, Number(msg.x), Number(msg.y)).catch(() => {});
+    });
+    return;
+  }
   if (msg === "status") {
     connect(); // opening the popup also reconnects right away
     reply({ state });
