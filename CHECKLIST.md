@@ -152,8 +152,11 @@ the hardware decisions in chapter 13 (see "Open questions" below).
 - [x] Step 3a — Code flow: git repos found on PC2 (live: 6 repos), register once with approval (path from PC2's own scan), "Start a new project" (folder + git under %USERPROFILE%/Projects, approval); wizard-only tools denied to the planner
 - [x] Extension stays connected while idle (two-way 10 s keepalive) and reconnects after agent restarts (live: 0 drops in 90 s idle; back 16 s after a 75 s outage in a test Chrome)
 - [ ] Step 3b — Cursor's own agent (needs `agent login`); spike: `-p` has shell access, gated only by `--force` / `.cursor/cli.json` allow-deny → deny-by-default + approve + `--resume`
-- [ ] Step 4 — social (FB, IG, X, TikTok) with approval cards and hourly limit
-- [ ] Step 5 — Office, Steam, OBS
+- [x] Step 4 — Facebook, Instagram, X, TikTok: browse free; like/comment/follow/post/message wizard-only, approval of the exact text, PC2 hash check, 20/hour per platform, login pages refused, result checked on the page (live in-Chrome check still to do)
+- [x] YouTube ads: Skip pressed automatically with a real click (YouTube ignores script clicks); verified on real ads in headless and visible Chrome; "skip ad" on demand; unskippable ads left alone
+- [x] Step 5 — OBS (WebSocket v5; record/scene/stop free, start stream needs approval), Office via COM (open recent/new, Word dictation, edit commands, save copy free, overwrite/close-discard need approval), Steam (installed games, launch). Live: OBS record start/stop, stream held for approval, Word new → dictate → delete sentence → read back → close without saving
+- [x] Voice answers: "Did I hear you right?" → Yes / Say it again by voice (typing optional); every question answerable by voice
+- [ ] Speech accuracy: benchmark small vs small.en vs medium.en with your vocabulary (running), then switch PC1
 - [ ] Step 6 — polish, archify onboarding guide, Phase 4 wrap-up
 
 ## Open questions (chapter 13) — needed before real deployment
