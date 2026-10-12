@@ -89,7 +89,9 @@ def scan(cfg: AgentConfig) -> list[dict[str, str]]:
                 continue
             walk(p, depth + 1)
 
-    for root in scan_roots(cfg):
+    # Most specific roots first: walking home first would mark OneDrive/Desktop as seen at depth 2 and stop
+    # one level short of repos that the Desktop root itself reaches (live: voice-pc-control was missed).
+    for root in sorted(scan_roots(cfg), key=lambda r: len(r.parts), reverse=True):
         walk(root, 1)
     names: set[str] = set(cfg.projects)
     for r in found:  # unique names: "portfolio", "portfolio-2"

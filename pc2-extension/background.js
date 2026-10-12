@@ -7,6 +7,8 @@ const DEFAULTS = { token: "", port: 8766, enabled: true };
 let ws = null;
 let state = "disconnected"; // disconnected | connecting | connected | wrong-token | off | no-token
 let keepalive = null;
+let retryMs = 2000;
+let retryTimer = null;
 
 async function settings() {
   return { ...DEFAULTS, ...(await chrome.storage.local.get(["token", "port", "enabled"])) };
@@ -37,6 +39,7 @@ async function connect() {
       return;
     }
     if (msg.type === "welcome") {
+      retryMs = 2000;
       setState("connected");
       clearInterval(keepalive);
       // An active WebSocket keeps the MV3 service worker alive (Chrome 116+) while messages flow.
@@ -58,7 +61,13 @@ async function connect() {
   sock.onclose = () => {
     clearInterval(keepalive);
     if (ws === sock) ws = null;
-    if (state !== "wrong-token") setState("disconnected");
+    if (state === "wrong-token") return;
+    setState("disconnected");
+    // The agent restarts after updates: retry soon (2 s, 4 s … 30 s) while this worker is alive; the
+    // 1-minute alarm covers the time after Chrome stops the worker.
+    clearTimeout(retryTimer);
+    retryTimer = setTimeout(connect, retryMs);
+    retryMs = Math.min(30000, retryMs * 2);
   };
 }
 
@@ -198,11 +207,11 @@ async function videoPlay() {
 }
 
 // ------------------------------------------------------------------ lifecycle
+// Alarms do not always survive a Chrome restart: make sure the 1-minute reconnect alarm exists every time
+// the worker starts (onInstalled alone missed it, so the extension stayed offline after an agent restart).
+chrome.alarms.get("reconnect").then((a) => a || chrome.alarms.create("reconnect", { periodInMinutes: 1 }));
 chrome.runtime.onStartup.addListener(connect);
-chrome.runtime.onInstalled.addListener(() => {
-  chrome.alarms.create("reconnect", { periodInMinutes: 1 });
-  connect();
-});
+chrome.runtime.onInstalled.addListener(connect);
 chrome.alarms.onAlarm.addListener((a) => a.name === "reconnect" && connect());
 chrome.storage.onChanged.addListener((changes, area) => {
   if (area !== "local") return;
@@ -212,6 +221,9 @@ chrome.storage.onChanged.addListener((changes, area) => {
   connect();
 });
 chrome.runtime.onMessage.addListener((msg, _sender, reply) => {
-  if (msg === "status") reply({ state });
+  if (msg === "status") {
+    connect(); // opening the popup also reconnects right away
+    reply({ state });
+  }
 });
 connect();

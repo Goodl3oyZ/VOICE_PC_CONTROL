@@ -23,5 +23,6 @@ $("save").onclick = async () => {
   $("token").placeholder = "saved (paste to replace)";
 };
 chrome.storage.session.onChanged.addListener(showStatus);
+chrome.runtime.sendMessage("status").catch(() => {}); // wakes the worker and reconnects
 showStatus();
 setInterval(showStatus, 1500);

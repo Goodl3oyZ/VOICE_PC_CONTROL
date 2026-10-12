@@ -103,3 +103,14 @@ def test_status_reports_projects_without_blocking(agent):
     from agent.tools.status import status_data
     data = status_data(client.app.state.ctx)
     assert data["projects"] == [] and isinstance(data["found_projects"], list)
+
+
+def test_nested_roots_do_not_hide_deeper_repos(tmp_path):
+    """Live bug: home was walked first, so ~/OneDrive/Desktop/Whale/voice-pc-control was never reached."""
+    home = tmp_path / "home"
+    desk = home / "OneDrive" / "Desktop"
+    repo(desk / "Whale" / "voice-pc-control")
+    projects.invalidate()
+    cfg = AgentConfig.from_dict({"data_dir": str(tmp_path / "d"), "projects_root": str(tmp_path / "P"),
+                                 "project_scan_roots": [str(home), str(desk)]})
+    assert [f["label"] for f in projects.scan(cfg)] == ["voice-pc-control"]
