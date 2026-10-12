@@ -250,6 +250,14 @@ function adShowing() {
 // A real mouse click at (x, y) in a YouTube tab through Chrome's debugger interface (YouTube only, at most every
 // 2 s per tab, detached right away). Chrome shows "Voice PC started debugging this browser" for a moment.
 const lastClick = new Map();
+// Fixed expression (never built from page or agent input): centre of the visible Skip button, or null.
+const SKIP_RECT_JS = `(() => {
+  const b = [...document.querySelectorAll(".ytp-skip-ad-button, .ytp-ad-skip-button, .ytp-ad-skip-button-modern, button[id^='skip-button']")]
+    .find((el) => el.getClientRects().length > 0);
+  if (!b) return null;
+  const r = b.getBoundingClientRect();
+  return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
+})()`;
 async function trustedClick(tabId, x, y) {
   const tab = await chrome.tabs.get(tabId);
   if (!/^https:\/\/(www\.)?youtube\.com\//.test(tab.url || "")) throw new Error("real clicks are only sent to YouTube");
@@ -260,6 +268,18 @@ async function trustedClick(tabId, x, y) {
   const target = { tabId };
   await chrome.debugger.attach(target, "1.3");
   try {
+    // Attaching shows Chrome's "started debugging" bar, which shortens the page; YouTube then resizes the
+    // player and the Skip button moves (live bug: clicks landed where it had been). Let the layout settle and
+    // measure again before clicking.
+    await new Promise((r) => setTimeout(r, 450));
+    const res = await chrome.debugger.sendCommand(target, "Runtime.evaluate", { returnByValue: true, expression: SKIP_RECT_JS });
+    const pos = res && res.result ? res.result.value : null;
+    if (pos) {
+      x = pos.x;
+      y = pos.y;
+    } else if (pos === null) {
+      return false; // the Skip button is gone (ad ended)
+    }
     for (const type of ["mousePressed", "mouseReleased"]) {
       await chrome.debugger.sendCommand(target, "Input.dispatchMouseEvent", { type, x, y, button: "left", clickCount: 1 });
     }
