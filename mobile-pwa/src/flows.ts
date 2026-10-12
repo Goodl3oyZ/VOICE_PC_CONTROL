@@ -80,3 +80,8 @@ export function resultsOf(job: Job | undefined): SearchResult[] {
   const r = step?.result.data?.results;
   return Array.isArray(r) ? (r as SearchResult[]).filter((x) => x && typeof x.title === "string") : [];
 }
+
+/** Controls / follow-ups that only apply to some answers (e.g. Word-only dictation and edits). */
+export function applies(when: { stage: string; values: string[] } | null | undefined, answers: Answers): boolean {
+  return !when || when.values.includes(answers[when.stage] ?? "");
+}

@@ -8,7 +8,7 @@ connectors of later build steps are listed as not available yet.
 from __future__ import annotations
 
 import re
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -19,7 +19,8 @@ from voice_contracts.tools import NAME_PATTERN, TOOLS
 
 from .knowledge import Knowledge
 
-Found = list[dict[str, str]] | tuple[()]  # git repos PC2 found that are not registered yet
+PC2View = Mapping[str, Any]  # PC2's latest status: found_projects, office_recent, steam_games
+_NO_PC2: PC2View = {}
 
 
 class FlowError(ValueError):
@@ -50,7 +51,19 @@ class Stage:
 @dataclass(frozen=True)
 class Control:
     label: str
-    command: str  # "{project}" etc. are filled from the answers
+    command: str = ""  # a sentence for the shortcut parser; "{project}" etc. are filled from the answers
+    call: Callable[[dict[str, str]], ToolCall] | None = None  # or an exact call (wizard-only tools)
+    when: tuple[str, tuple[str, ...]] | None = None  # shown only for these answers (e.g. Word only)
+
+
+@dataclass(frozen=True)
+class FollowUp:
+    """A free-text box after the flow ran, e.g. dictation: every sentence becomes one exact call."""
+    label: str
+    placeholder: str
+    tool: str
+    arg: str
+    when: tuple[str, tuple[str, ...]] | None = None
 
 
 @dataclass(frozen=True)
@@ -67,6 +80,7 @@ class Flow:
     available: bool = True
     coming: str = ""  # why a tile is not available yet
     triggers: tuple[str, ...] = field(default=())  # spoken names that open this flow
+    followup: FollowUp | None = None
 
 
 MEDIA_CONTROLS = (
@@ -101,6 +115,27 @@ def _code(a: dict[str, str]) -> str | ToolCall:
 
 
 _SOON = "Arrives with the Chrome extension (build step 2)"
+OFFICE_DOC = {"word": "document", "excel": "workbook", "powerpoint": "presentation"}
+
+
+def _obs(a: dict[str, str]) -> ToolCall:
+    if a["what"] == "start_stream":
+        return ToolCall(tool="obs_start_stream", arguments={}, rationale="OBS: start streaming (goes public)")
+    args = {"action": a["what"], "scene": a.get("scene", "")}
+    return ToolCall(tool="obs_control", arguments=args, rationale=f"OBS: {a['what'].replace('_', ' ')}"
+                    + (f" “{args['scene']}”" if args["scene"] else ""))
+
+
+def _word_edit(action: str) -> Callable[[dict[str, str]], ToolCall]:
+    return lambda a: ToolCall(tool="word_edit", arguments={"action": action})
+
+
+def _office(a: dict[str, str]) -> ToolCall:
+    app = a["app"]
+    path = a.get(f"file_{app}_path", "")
+    name = path.replace("/", "\\").split("\\")[-1] if path else f"a new {OFFICE_DOC[app]}"
+    return ToolCall(tool="office_open", arguments={"app": app, "path": path},
+                    rationale=f"Open {name} in {app.title() if app != 'powerpoint' else 'PowerPoint'}")
 
 # ---- social (step 4): browsing is free; actions others can see go to the approval card with the exact text
 _PAGE_LABELS = {"feed": ("Feed", ""), "foryou": ("For You", ""), "following": ("Following", ""),
@@ -201,32 +236,88 @@ FLOWS: dict[str, Flow] = {f.id: f for f in [
          controls=(Control("What's running?", "Show status"), Control("Look at the screen", "What's on the screen?"),
                    Control("Wake up the PC", "Wake up the PC"), Control("Stop everything", "Stop"))),
     *[_social_flow(*f) for f in SOCIAL_FLOWS],
-    Flow("office", "Office", "Word, Excel, PowerPoint", "office", "Work", available=False,
-         coming="Arrives with the Office connector (build step 5)"),
-    Flow("steam", "Steam", "Launch your games", "steam", "Play", available=False,
-         coming="Arrives with build step 5"),
-    Flow("obs", "OBS", "Record and stream", "obs", "Play", available=False, coming="Arrives with build step 5"),
+    Flow("obs", "OBS", "Record and stream", "obs", "Play",
+         stages=(Stage("what", "choice", "What do you want to do?", (
+             Option("start_recording", "Start recording"), Option("stop_recording", "Stop recording"),
+             Option("start_stream", "Start streaming", "Goes public: you approve it on the phone"),
+             Option("stop_streaming", "Stop streaming", "Always allowed, right away"),
+             Option("set_scene", "Switch scene"), Option("status", "What's OBS doing?"))),
+             Stage("scene", "text", "Which scene?", when=("what", ("set_scene",)), placeholder="Scene name")),
+         build=_obs, triggers=("obs", "recording", "streaming"),
+         controls=(Control("Start recording", call=lambda a: ToolCall(tool="obs_control",
+                                                                      arguments={"action": "start_recording"})),
+                   Control("Stop recording", call=lambda a: ToolCall(tool="obs_control",
+                                                                     arguments={"action": "stop_recording"})),
+                   Control("Stop streaming", call=lambda a: ToolCall(tool="obs_control",
+                                                                     arguments={"action": "stop_streaming"})),
+                   Control("Status", call=lambda a: ToolCall(tool="obs_control", arguments={"action": "status"})))),
+    Flow("office", "Office", "Word, Excel, PowerPoint", "office", "Work",
+         stages=(Stage("app", "choice", "Which app?", (Option("word", "Word"), Option("excel", "Excel"),
+                                                        Option("powerpoint", "PowerPoint")), remember="last_office"),
+                 *[Stage(f"file_{app}", "choice", "Which file?", source=f"office:{app}", when=("app", (app,)))
+                   for app in OFFICE_DOC]),
+         build=_office, triggers=("office", "word", "excel", "powerpoint"),
+         followup=FollowUp("Dictate", "Say a sentence and it is typed into Word…", "word_type", "text",
+                           when=("app", ("word",))),
+         controls=(*[Control(label, call=_word_edit(act), when=("app", ("word",)))
+                     for label, act in (("New paragraph", "new_paragraph"),
+                                        ("Delete last sentence", "delete_last_sentence"),
+                                        ("Read back last paragraph", "read_last_paragraph"), ("Undo", "undo"))],
+                   Control("Save as a new copy", call=lambda a: ToolCall(tool="office_save_copy",
+                                                                         arguments={"app": a["app"]})),
+                   Control("Save (overwrite)", call=lambda a: ToolCall(tool="office_finish",
+                                                                       arguments={"app": a["app"], "mode": "save"})),
+                   Control("Close without saving", call=lambda a: ToolCall(
+                       tool="office_finish", arguments={"app": a["app"], "mode": "close_discard"})))),
+    Flow("steam", "Steam", "Launch your games", "steam", "Play",
+         stages=(Stage("game", "choice", "Which game?", source="steam", remember="last_game"),),
+         build=lambda a: ToolCall(tool="steam_launch", arguments={"appid": a["game"]},
+                                  rationale="Start a Steam game"),
+         triggers=("steam", "games")),
 ]}
 
 
-def _options(stage: Stage, kb: Knowledge, found: Found = ()) -> list[Option]:
+def _list(pc2: PC2View, key: str, sub: str | None = None) -> list[dict[str, str]]:
+    v: Any = pc2.get(key)
+    if sub is not None:
+        v = v.get(sub) if isinstance(v, dict) else None
+    if not isinstance(v, list):
+        return []
+    return [x for x in v if isinstance(x, dict) and all(isinstance(y, str) for y in x.values())]
+
+
+def _folder(path: str) -> str:
+    parts = path.replace("/", "\\").split("\\")
+    return "\\".join(parts[-3:-1]) if len(parts) > 2 else ""
+
+
+def _options(stage: Stage, kb: Knowledge, pc2: PC2View = _NO_PC2) -> list[Option]:
     if stage.source == "projects":
         mine = [Option(p, str(v.get("display", p)) if isinstance(v, dict) else p) for p, v in kb.projects.items()]
         return mine + [Option(f"repo:{f['name']}", f.get("label") or f["name"],
                               "Found on the PC · you approve once, then pick it again")
-                       for f in found if f["name"] not in kb.projects]
+                       for f in _list(pc2, "found_projects") if f.get("name") and f["name"] not in kb.projects]
+    if stage.source.startswith("office:"):
+        app = stage.source[7:]
+        return [Option("new", f"New blank {OFFICE_DOC[app]}")] + [
+            Option(f"file:{i}", f.get("name", "?"), _folder(f.get("path", "")))
+            for i, f in enumerate(_list(pc2, "office_recent", app)[:8])]
+    if stage.source == "steam":
+        return [Option(g["appid"], g.get("name", g["appid"])) for g in _list(pc2, "steam_games")
+                if g.get("appid", "").isdigit()][:20]
     if stage.source == "apps":
         return [Option(a, kb.display(a, "en")) for a in kb.apps]
     return list(stage.options)
 
 
-def public_flows(kb: Knowledge, settings: Callable[[str], str | None], found: Found = ()) -> list[dict[str, Any]]:
+def public_flows(kb: Knowledge, settings: Callable[[str], str | None],
+                 pc2: PC2View = _NO_PC2) -> list[dict[str, Any]]:
     """What the phone draws: tiles, stages with their options, defaults remembered from last time."""
     out = []
     for f in FLOWS.values():
         stages = []
         for s in f.stages:
-            opts = _options(s, kb, found)
+            opts = _options(s, kb, pc2)
             default = settings(f"flow.{s.remember}") if s.remember else None
             if default not in {o.value for o in opts if o.available}:
                 default = None
@@ -237,7 +328,12 @@ def public_flows(kb: Knowledge, settings: Callable[[str], str | None], found: Fo
                                         "available": o.available} for o in opts]})
         out.append({"id": f.id, "title": f.title, "subtitle": f.subtitle, "icon": f.icon, "group": f.group,
                     "available": f.available, "coming": f.coming, "pick_results": f.pick_results,
-                    "stages": stages, "controls": [{"label": c.label, "command": c.command} for c in f.controls]})
+                    "stages": stages,
+                    "controls": [{"label": c.label, "command": c.command or c.label, "when": _when(c.when)}
+                                 for c in f.controls],
+                    "followup": None if f.followup is None else {
+                        "label": f.followup.label, "placeholder": f.followup.placeholder,
+                        "when": _when(f.followup.when)}})
     return out
 
 
@@ -246,7 +342,7 @@ def _active(stage: Stage, answers: dict[str, str]) -> bool:
 
 
 def resolve(flow_id: str, answers: dict[str, str], kb: Knowledge,
-            found: Found = ()) -> tuple[str | ToolCall | None, dict[str, str]]:
+            pc2: PC2View = _NO_PC2) -> tuple[str | ToolCall | None, dict[str, str]]:
     """Check the answers and build the command sentence. Returns (command or None, values to remember)."""
     f = FLOWS.get(flow_id)
     if f is None or not f.available:
@@ -258,11 +354,13 @@ def resolve(flow_id: str, answers: dict[str, str], kb: Knowledge,
             continue
         v = " ".join(str(answers.get(s.id, "")).split())
         if s.kind == "choice":
-            allowed = {o.value for o in _options(s, kb, found) if o.available}
+            allowed = {o.value for o in _options(s, kb, pc2) if o.available}
             if v not in allowed:
                 raise FlowError(f"choose one of the options for '{s.question}'")
             if v.startswith("repo:"):  # the path comes from PC2's own scan, never from the phone
-                clean[f"{s.id}_path"] = next(f["path"] for f in found if f["name"] == v[5:])
+                clean[f"{s.id}_path"] = next(f["path"] for f in _list(pc2, "found_projects") if f["name"] == v[5:])
+            elif v.startswith("file:"):  # same for Office's recent files
+                clean[f"{s.id}_path"] = _list(pc2, "office_recent", s.source[7:])[int(v[5:])]["path"]
             elif s.remember:
                 remember[f"flow.{s.remember}"] = v
         else:
@@ -276,25 +374,64 @@ def resolve(flow_id: str, answers: dict[str, str], kb: Knowledge,
         clean[s.id] = v
     command = f.build(clean) if f.build else None
     if isinstance(command, ToolCall):  # check the exact call now, so the phone gets a clear message
-        try:
-            TOOLS[command.tool].args.model_validate(command.arguments)
-        except ValidationError as e:
-            raise FlowError(str(e.errors()[0].get("msg", "invalid answer")).removeprefix("Value error, ")) from e
+        _check(command)
     return command, remember
 
 
-def control_command(flow_id: str, index: int, answers: dict[str, str], kb: Knowledge) -> str:
-    """A follow-up control (\"Next\", \"Show the changes\"), with {placeholders} filled from checked answers."""
+def _check(call: ToolCall) -> ToolCall:
+    try:
+        TOOLS[call.tool].args.model_validate(call.arguments)
+    except ValidationError as e:
+        raise FlowError(str(e.errors()[0].get("msg", "invalid answer")).removeprefix("Value error, ")) from e
+    return call
+
+
+def _when(w: tuple[str, tuple[str, ...]] | None) -> dict[str, Any] | None:
+    return {"stage": w[0], "values": list(w[1])} if w else None
+
+
+def control_command(flow_id: str, index: int, answers: dict[str, str], kb: Knowledge,
+                    pc2: PC2View = _NO_PC2) -> str | ToolCall:
+    """A follow-up control ("Next", "Show the changes", "New paragraph"), filled from CHECKED answers only."""
     f = FLOWS.get(flow_id)
     if f is None or not f.available or not 0 <= index < len(f.controls):
         raise FlowError("unknown control")
-    cmd = f.controls[index].command
+    c = f.controls[index]
+    if c.call is not None:
+        checked = _checked(f, answers, kb, pc2)
+        if c.when and checked.get(c.when[0]) not in c.when[1]:
+            raise FlowError("that control does not apply here")
+        return _check(c.call(checked))
+    cmd = c.command
     for key in re.findall(r"\{(\w+)\}", cmd):
         stage = next((s for s in f.stages if s.id == key), None)
-        if stage is None or answers.get(key) not in {o.value for o in _options(stage, kb) if o.available}:
+        if stage is None or answers.get(key) not in {o.value for o in _options(stage, kb, pc2) if o.available}:
             raise FlowError(f"missing {key}")
         cmd = cmd.replace("{" + key + "}", answers[key])
     return cmd
+
+
+def _checked(f: Flow, answers: dict[str, str], kb: Knowledge, pc2: PC2View) -> dict[str, str]:
+    """Only choice answers that are valid options (controls never take free text from the phone)."""
+    out: dict[str, str] = {}
+    for s in f.stages:
+        if s.kind == "choice" and _active(s, out) and answers.get(s.id) in {o.value for o in _options(s, kb, pc2)}:
+            out[s.id] = answers[s.id]
+    return out
+
+
+def followup_call(flow_id: str, text: str, answers: dict[str, str], kb: Knowledge,
+                  pc2: PC2View = _NO_PC2) -> ToolCall:
+    f = FLOWS.get(flow_id)
+    if f is None or not f.available or f.followup is None:
+        raise FlowError("this flow takes no follow-up text")
+    fu = f.followup
+    if fu.when and _checked(f, answers, kb, pc2).get(fu.when[0]) not in fu.when[1]:
+        raise FlowError("dictation works in Word only")
+    text = " ".join(text.split())[:2000]
+    if not text:
+        raise FlowError("say or type something")
+    return _check(ToolCall(tool=fu.tool, arguments={fu.arg: text}, rationale=f"{fu.label}: “{text[:80]}”"))
 
 
 _TRIGGER_RE = re.compile(r"^(?:(?:open|start|launch|show|go\s+to)\s+(?:the\s+|my\s+)?)?(?P<name>[a-z ]+?)"

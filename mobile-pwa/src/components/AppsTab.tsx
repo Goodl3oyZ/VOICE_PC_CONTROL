@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useMemo, useState, type ComponentType } from "react";
 import type { Api, FlowDef, FlowStage, Job } from "../api";
-import { clearFrom, matchChoice, nextStage, resultsOf, startAnswers, stepInfo, type Answers } from "../flows";
+import { applies, clearFrom, matchChoice, nextStage, resultsOf, startAnswers, stepInfo, type Answers } from "../flows";
 import { useRecorder } from "../useRecorder";
 import { ActiveJobCard } from "./ActiveJobCard";
+import { VoiceAnswerButton } from "./VoiceAnswerButton";
 import {
   ChevronLeftIcon,
   ChevronRightIcon,
@@ -155,6 +156,8 @@ function FlowWizard({ api, flow, jobs, onClose, onJob, onUpdate, onError }: Wiza
   const [text, setText] = useState("");
   const [heard, setHeard] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
+  const [dictated, setDictated] = useState<string[]>([]);
+  const [draft, setDraft] = useState("");
 
   const stage = ran ? null : nextStage(flow, answers);
   const job = jobs.find((j) => j.id === jobId);
@@ -224,10 +227,27 @@ function FlowWizard({ api, flow, jobs, onClose, onJob, onUpdate, onError }: Wiza
     }).catch(onError);
   };
 
+  const dictate = (text: string) => {
+    const t = text.trim();
+    if (!t) return;
+    setDraft("");
+    api
+      .flowFollowup(flow.id, t, answers)
+      .then((j) => {
+        setDictated((d) => [...d.slice(-4), t]);
+        setJobId(j.id);
+        onJob(j);
+      })
+      .catch(onError);
+  };
+  const controls = flow.controls.map((c, i) => ({ ...c, i })).filter((c) => applies(c.when, answers));
+  const followup = flow.followup && applies(flow.followup.when, answers) ? flow.followup : null;
+
   const restart = () => {
     setAnswers(startAnswers(flow));
     setRan(false);
     setJobId(null);
+    setDictated([]);
   };
 
   return (
@@ -333,10 +353,29 @@ function FlowWizard({ api, flow, jobs, onClose, onJob, onUpdate, onError }: Wiza
               ))}
             </div>
           )}
-          {flow.controls.length > 0 && (
+          {followup && (
+            <section className="flow-followup" aria-label={followup.label}>
+              <h3 className="flow-question">{followup.label}</h3>
+              <VoiceAnswerButton api={api} label="Tap and speak a sentence" onText={dictate} onError={onError}
+                className="flow-dictate-mic" />
+              <form className="flow-text" onSubmit={(e) => { e.preventDefault(); dictate(draft); }}>
+                <input value={draft} onChange={(e) => setDraft(e.target.value)} placeholder={followup.placeholder}
+                  maxLength={2000} aria-label={followup.label} />
+                <button type="submit" className="flow-send" aria-label="Send" disabled={!draft.trim()}>
+                  <SendIcon size={18} />
+                </button>
+              </form>
+              {dictated.length > 0 && (
+                <ol className="flow-dictated">
+                  {dictated.map((t, i) => <li key={i}>{t}</li>)}
+                </ol>
+              )}
+            </section>
+          )}
+          {controls.length > 0 && (
             <div className="flow-controls" aria-label="Controls">
-              {flow.controls.map((c, i) => (
-                <button key={c.label} type="button" className="flow-control" onClick={() => control(i)}>
+              {controls.map((c) => (
+                <button key={c.label} type="button" className="flow-control" onClick={() => control(c.i)}>
                   {c.label}
                 </button>
               ))}

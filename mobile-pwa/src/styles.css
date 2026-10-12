@@ -4093,3 +4093,83 @@ a.btn-setup-submit { text-decoration: none; display: flex; justify-content: cent
   background: var(--color-danger-bg);
   border-color: var(--color-danger-border);
 }
+
+/* "Did I hear you right?" — answer with a tap or by voice, typing is optional */
+.clarification-heard {
+  margin: 4px 0 10px;
+  font-size: 1.15rem;
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+
+.clarify-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.clarify-actions > * {
+  flex: 1 1 120px;
+}
+
+.voice-answer-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 8px 14px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--cyan-border);
+  background: var(--cyan-muted);
+  color: var(--text-primary);
+  font-weight: 700;
+}
+
+.voice-answer-btn.is-recording {
+  background: var(--color-danger-bg);
+  border-color: var(--color-danger-border);
+  color: var(--color-danger);
+}
+
+.voice-answer-btn:disabled {
+  opacity: 0.6;
+}
+
+.voice-answer-note {
+  margin: 4px 0 0;
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+}
+
+.clarify-type-link {
+  padding: 4px 0;
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+  text-decoration: underline;
+}
+
+/* Office dictation box (step 5) */
+.flow-followup {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--cyan-border);
+  background: var(--cyan-muted);
+}
+
+.flow-dictate-mic {
+  min-height: 56px;
+  font-size: 1rem;
+}
+
+.flow-dictated {
+  margin: 0;
+  padding-left: 20px;
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+  overflow-wrap: anywhere;
+}

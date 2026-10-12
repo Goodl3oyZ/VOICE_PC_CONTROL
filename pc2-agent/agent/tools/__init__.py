@@ -48,4 +48,4 @@ def register(name: str) -> Callable[[ToolFn], ToolFn]:
     return deco
 
 
-from . import apps, code, media, projects, screen, social, status, web  # noqa: E402,F401  (registers tools)
+from . import apps, code, media, obs, office, projects, screen, social, status, steam, web  # noqa: E402,F401  (registers tools)

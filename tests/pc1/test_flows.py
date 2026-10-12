@@ -56,11 +56,16 @@ def test_code_flow_open_is_a_shortcut_and_change_goes_to_the_coding_loop(kb, rig
 
 
 def test_every_control_parses(kb, rig):
-    answers = {"project": "demo"}
+    from voice_contracts.models import ToolCall
+    from voice_contracts.tools import TOOLS
+    answers = {"project": "demo", "app": "word"}
     expected = {"code": {"git_diff", "run_tests", "revert_changes"}}
     for f in FLOWS.values():
         for i, _c in enumerate(f.controls):
             cmd = control_command(f.id, i, answers, kb)
+            if isinstance(cmd, ToolCall):  # exact call: valid arguments, never through the parser
+                TOOLS[cmd.tool].args.model_validate(cmd.arguments)
+                continue
             call = match_shortcut(rig.orch.normalize(cmd), kb)
             assert call is not None, (f.id, cmd)
             assert call.tool in expected.get(f.id, {call.tool}), (f.id, cmd, call.tool)
@@ -73,7 +78,6 @@ def test_every_control_parses(kb, rig):
     ("code", {"what": "ask", "project": "demo"}, "choose"),  # needs Cursor (build step 3)
     ("music", {"app": "tiktok", "query": "x"}, "choose"),
     ("apps", {"app": "regedit"}, "choose"),
-    ("office", {}, "unknown flow"),
     ("nope", {}, "unknown flow"),
 ])
 def test_bad_answers_are_rejected(kb, flow, answers, msg):
@@ -96,7 +100,7 @@ def test_spoken_app_names_open_the_wizard(text, flow):
     assert flow_trigger(text) == flow
 
 
-@pytest.mark.parametrize("text", ["search cats", "play lofi", "open notepad", "stop", "open office",
+@pytest.mark.parametrize("text", ["search cats", "play lofi", "open notepad", "stop", "open the pod bay doors",
                                   "in the demo project open the code"])
 def test_other_commands_are_not_flow_triggers(text):
     assert flow_trigger(text) is None
@@ -119,7 +123,7 @@ def test_flow_api(api):
     client, rig, _ = api
     flows = client.get("/flows").json()
     ids = {f["id"]: f for f in flows}
-    assert ids["youtube"]["available"] and not ids["office"]["available"] and ids["office"]["coming"]
+    assert all(f["available"] for f in flows)  # every app has its flow now (steps 1-5)
     project = next(s for s in ids["code"]["stages"] if s["id"] == "project")
     assert [o["value"] for o in project["options"]] == ["demo"]
     r = client.post("/flows/youtube/run", json={"answers": {"what": "play", "query": "lofi"}})
@@ -280,3 +284,68 @@ async def test_page_text_can_never_trigger_a_social_action(rig):
 def test_skip_ad_shortcut(kb, rig, text, tool):
     call = match_shortcut(rig.orch.normalize(text), kb)
     assert call is not None and call.tool == tool
+
+
+
+# ------------------------------------------------------------------ step 5: OBS, Office, Steam
+PC2 = {"office_recent": {"word": [{"name": "Report.docx", "path": "C:/Users/me/Documents/Report.docx"}]},
+       "steam_games": [{"appid": "570", "name": "Dota 2", "last_played": "1"}]}
+
+
+def test_office_open_uses_paths_from_pc2_only(kb):
+    call, remember = resolve("office", {"app": "word", "file_word": "file:0"}, kb, PC2)
+    path = PC2["office_recent"]["word"][0]["path"]
+    assert call.tool == "office_open" and call.arguments == {"app": "word", "path": path}
+    assert remember == {"flow.last_office": "word"}
+    call, _ = resolve("office", {"app": "excel", "file_excel": "new"}, kb, PC2)
+    assert call.arguments == {"app": "excel", "path": ""}
+    with pytest.raises(FlowError):
+        resolve("office", {"app": "word", "file_word": "file:5"}, kb, PC2)
+
+
+async def test_dictation_is_an_exact_call_and_word_only(rig):
+    from voice_contracts.models import ToolResult
+    rig.orch.pc2_status = PC2
+    rig.pc2.handlers["word_type"] = lambda a: ToolResult(ok=True, verified=True, data={"typed": len(a["text"])})
+    job = await rig.orch.run_flow_followup("office", "Dear team, the report is ready.", {"app": "word"}, "phone")
+    await rig.orch.wait_idle()
+    assert rig.orch.get_job(job.id).state == S.DONE and rig.llm.calls == []
+    assert rig.pc2.calls[-1] == {**rig.pc2.calls[-1], "tool": "word_type",
+                                 "arguments": {"text": "Dear team, the report is ready."}}
+    with pytest.raises(FlowError, match="Word only"):
+        await rig.orch.run_flow_followup("office", "hello", {"app": "excel"}, "phone")
+
+
+async def test_overwrite_or_discard_needs_approval_but_a_copy_does_not(rig):
+    from voice_contracts.models import ToolResult
+    rig.pc2.handlers["office_finish"] = lambda a: ToolResult(ok=True, verified=True, data={})
+    rig.pc2.handlers["office_save_copy"] = lambda a: ToolResult(ok=True, verified=True, data={"saved_as": "x"})
+    labels = [c.label for c in FLOWS["office"].controls]
+    job = await rig.orch.run_flow_control("office", labels.index("Close without saving"), {"app": "word"}, "phone")
+    await rig.orch.wait_idle()
+    assert rig.orch.get_job(job.id).state == S.AWAITING_CONFIRM and rig.pc2.calls == []
+    job = await rig.orch.run_flow_control("office", labels.index("Save as a new copy"), {"app": "word"}, "phone")
+    await rig.orch.wait_idle()
+    assert rig.orch.get_job(job.id).state == S.DONE and rig.pc2.calls[-1]["tool"] == "office_save_copy"
+
+
+async def test_streaming_needs_approval_recording_does_not(rig):
+    from voice_contracts.models import ToolResult
+    rig.pc2.handlers["obs_control"] = lambda a: ToolResult(ok=True, verified=True, data={"recording": True})
+    job = await rig.orch.run_flow("obs", {"what": "start_stream"}, "phone")
+    await rig.orch.wait_idle()
+    assert rig.orch.get_job(job.id).state == S.AWAITING_CONFIRM and rig.pc2.calls == []
+    job = await rig.orch.run_flow("obs", {"what": "start_recording"}, "phone")
+    await rig.orch.wait_idle()
+    assert rig.orch.get_job(job.id).state == S.DONE and rig.pc2.calls[-1]["arguments"]["action"] == "start_recording"
+
+
+def test_steam_lists_installed_games_from_pc2(kb):
+    call, _ = resolve("steam", {"game": "570"}, kb, PC2)
+    assert call.tool == "steam_launch" and call.arguments == {"appid": "570"}
+    with pytest.raises(FlowError):
+        resolve("steam", {"game": "999"}, kb, PC2)
+
+
+def test_voice_starts_the_new_flows():
+    assert flow_trigger("open OBS") == "obs" and flow_trigger("Word") == "office" and flow_trigger("steam") == "steam"

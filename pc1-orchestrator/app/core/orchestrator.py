@@ -30,7 +30,7 @@ from ..ports import (
 )
 from .aliases import AliasNormalizer
 from .capabilities import help_summary, is_help
-from .flows import FLOWS, control_command, flow_trigger, public_flows, resolve
+from .flows import FLOWS, control_command, flow_trigger, followup_call, public_flows, resolve
 from .i18n import YES_WORDS, Messages, is_english
 from .jobs import Job, JobState, new_job_id
 from .knowledge import Knowledge
@@ -114,17 +114,12 @@ class Orchestrator:
         return await self._start(job)
 
     def flows(self) -> list[dict[str, Any]]:
-        return public_flows(self.kb, self.store.get_setting, self._found_projects())
-
-    def _found_projects(self) -> list[dict[str, str]]:
-        found = self.pc2_status.get("found_projects") or []
-        return [f for f in found if isinstance(f, dict) and isinstance(f.get("name"), str)
-                and isinstance(f.get("path"), str)]
+        return public_flows(self.kb, self.store.get_setting, self.pc2_status)
 
     async def run_flow(self, flow_id: str, answers: dict[str, str], device: str) -> Job | None:
         """A finished wizard: checked answers -> an ordinary command (same policy/approval/audit path).
         None when the flow only opens its controls (e.g. "Control what's playing")."""
-        command, remember = resolve(flow_id, answers, self.kb, self._found_projects())
+        command, remember = resolve(flow_id, answers, self.kb, self.pc2_status)
         for key, value in remember.items():  # "remember last used" (e.g. the music app)
             self.store.set_setting(key, value)
         if isinstance(command, ToolCall):  # wizard-only tool (register/create a project): exact call, no LLM
@@ -132,7 +127,15 @@ class Orchestrator:
         return None if command is None else await self.submit_text(command, device, flow=flow_id)
 
     async def run_flow_control(self, flow_id: str, index: int, answers: dict[str, str], device: str) -> Job:
-        return await self.submit_text(control_command(flow_id, index, answers, self.kb), device, flow=flow_id)
+        cmd = control_command(flow_id, index, answers, self.kb, self.pc2_status)
+        if isinstance(cmd, ToolCall):
+            return await self.submit_text(cmd.rationale or cmd.tool, device, flow=flow_id, preset=cmd)
+        return await self.submit_text(cmd, device, flow=flow_id)
+
+    async def run_flow_followup(self, flow_id: str, text: str, answers: dict[str, str], device: str) -> Job:
+        """e.g. one dictated sentence for Word: an exact call, never interpreted by the LLM."""
+        call = followup_call(flow_id, text, answers, self.kb, self.pc2_status)
+        return await self.submit_text(call.rationale, device, flow=flow_id, preset=call)
 
     async def transcribe(self, audio: bytes, mime: str) -> str:
         """Voice answer to a wizard stage: text only, no job, nothing stored (like ignored hands-free speech).

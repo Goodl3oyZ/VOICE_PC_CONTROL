@@ -58,6 +58,10 @@ class FlowControlIn(FlowRunIn):
     index: int = Field(ge=0, lt=20)
 
 
+class FlowFollowUpIn(FlowRunIn):
+    text: str = Field(min_length=1, max_length=2000)
+
+
 class ConfirmIn(BaseModel):
     approve: bool
     args_hash: str = Field(max_length=100)
@@ -187,6 +191,13 @@ def create_app(orch: Orchestrator, store: SqliteStore, broadcaster: Broadcaster,
     async def flow_control(flow_id: str, body: FlowControlIn, dev: Device) -> dict[str, Any]:
         try:
             return (await orch.run_flow_control(flow_id, body.index, body.answers, dev)).public()
+        except FlowError as e:
+            raise HTTPException(422, str(e)) from e
+
+    @app.post("/flows/{flow_id}/followup")
+    async def flow_followup(flow_id: str, body: FlowFollowUpIn, dev: Device) -> dict[str, Any]:
+        try:
+            return (await orch.run_flow_followup(flow_id, body.text, body.answers, dev)).public()
         except FlowError as e:
             raise HTTPException(422, str(e)) from e
 

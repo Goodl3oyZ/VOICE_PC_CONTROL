@@ -10,3 +10,4 @@ psutil>=5.9
 #   PC2: keyring               (store the HMAC secret in Windows Credential Manager)
 #   PC2: playwright==1.63.0    (Phase 2 agent browser; drives the installed Chrome, no browser download)
 #   PC2: pillow==11.3.0        (Phase 4 "what's on the screen?" screenshots)
+#   PC2: pywin32==311          (step 5: Word/Excel/PowerPoint through Office's own COM automation)

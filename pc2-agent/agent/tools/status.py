@@ -13,7 +13,26 @@ def status_data(ctx: ToolContext) -> dict[str, object]:
     chrome = None if bridge is None else bool(bridge.connected)
     from .projects import discovered  # cached git-repo scan (refreshed in the background)
     return {"running": running, "kill_switch": ctx.kill.on, "version": "0.1.0", "chrome_connected": chrome,
-            "projects": sorted(ctx.cfg.projects), "found_projects": discovered(ctx.cfg)}
+            "projects": sorted(ctx.cfg.projects), "found_projects": discovered(ctx.cfg),
+            "office_recent": _safe(_office_recent), "steam_games": _safe(_steam_games)}
+
+
+def _office_recent() -> object:
+    from .office import recent_files
+    return recent_files()
+
+
+def _steam_games() -> object:
+    from .steam import installed_games
+    return installed_games()
+
+
+def _safe(fn: object) -> object:
+    """Status must never fail because of an optional app (cached reads; errors become empty)."""
+    try:
+        return fn()  # type: ignore[operator]
+    except Exception:  # noqa: BLE001
+        return {} if fn is _office_recent else []
 
 
 @register("get_status")

@@ -22,6 +22,7 @@ export interface Job {
   normalized: string;
   stt_confidence: number | null;
   question: string | null;
+  clarify_kind?: "stt_confirm" | "llm" | null; // stt_confirm: "Did I hear you right?"
   pending: Pending | null;
   steps: {
     tool: string;
@@ -64,7 +65,8 @@ export interface FlowDef {
   coming: string;
   pick_results: boolean;
   stages: FlowStage[];
-  controls: { label: string; command: string }[];
+  controls: { label: string; command: string; when: { stage: string; values: string[] } | null }[];
+  followup: { label: string; placeholder: string; when: { stage: string; values: string[] } | null } | null;
 }
 
 export type ServerEvent =
@@ -146,6 +148,8 @@ export class Api {
     this.req<{ job: Job | null }>("POST", `/flows/${encodeURIComponent(id)}/run`, JSON.stringify({ answers }));
   flowControl = (id: string, index: number, answers: Record<string, string>) =>
     this.req<Job>("POST", `/flows/${encodeURIComponent(id)}/control`, JSON.stringify({ index, answers }));
+  flowFollowup = (id: string, text: string, answers: Record<string, string>) =>
+    this.req<Job>("POST", `/flows/${encodeURIComponent(id)}/followup`, JSON.stringify({ text, answers }));
   /** Voice answer for a wizard stage: text only, PC1 creates no job. */
   transcribe = (blob: Blob) => {
     const form = new FormData();

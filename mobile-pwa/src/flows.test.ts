@@ -6,7 +6,7 @@ const opt = (value: string, label: string, available = true): FlowOption => ({ v
 
 const YT: FlowDef = {
   id: "youtube", title: "YouTube", subtitle: "", icon: "youtube", group: "Watch", available: true, coming: "",
-  pick_results: true, controls: [],
+  pick_results: true, controls: [], followup: null,
   stages: [
     { id: "what", kind: "choice", question: "What?", placeholder: "", when: null, default: null,
       options: [opt("play", "Play something now"), opt("search", "Search and pick"), opt("controls", "Control what's playing")] },
@@ -70,4 +70,12 @@ it("reads search results from the job's last web_search", () => {
   } as unknown as Job;
   expect(resultsOf(job)).toEqual([{ title: "Lofi", url: "https://youtube.com/x" }]);
   expect(resultsOf(undefined)).toEqual([]);
+});
+
+it("Word-only controls and dictation apply only when Word was chosen", async () => {
+  const { applies } = await import("./flows");
+  const w = { stage: "app", values: ["word"] };
+  expect(applies(w, { app: "word" })).toBe(true);
+  expect(applies(w, { app: "excel" })).toBe(false);
+  expect(applies(null, {})).toBe(true);
 });

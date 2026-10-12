@@ -109,7 +109,7 @@ _PROJECT_CMDS = [
      "list_files"),
     (re.compile(r"^(run\s+(the\s+)?tests\s+(in|for|of)\s+(the\s+)?(?P<p>[\w\-]+)(\s+project)?|"
                 r"run\s+(the\s+)?(?P<p2>[\w\-]+)\s+tests|test\s+(?P<p3>[\w\-]+))$", re.I), "run_tests"),
-    (re.compile(r"^(show\s+(me\s+)?(the\s+)?(diff|changes)\s+(for|in|of)\s+(the\s+)?(?P<p>[\w\-]+)(\s+project)?|"
+    (re.compile(r"^(show\s+(me\s+)?(the\s+)?(diff|difference|changes)\s+(for|in|of)\s+(the\s+)?(?P<p>[\w\-]+)(\s+project)?|"
                 r"what\s+changed\s+in\s+(the\s+)?(?P<p2>[\w\-]+)(\s+project)?)$", re.I), "git_diff"),
     (re.compile(r"^(revert|undo|discard)\s+(all\s+)?(the\s+)?(ai\s+)?(changes|edits)\s+(in|for|of)\s+(the\s+)?"
                 r"(?P<p>[\w\-]+)(\s+project)?$", re.I), "revert_changes"),

@@ -160,6 +160,42 @@ class SocialActArgs(_Args):
         return self
 
 
+# ---- App flows step 5: OBS, Office, Steam ----
+OfficeApp = Literal["word", "excel", "powerpoint"]
+
+
+class ObsArgs(_Args):
+    action: Literal["status", "start_recording", "stop_recording", "stop_streaming", "set_scene"]
+    scene: str = Field("", max_length=100, description="Scene name for set_scene")
+
+
+class OfficeOpenArgs(_Args):
+    app: OfficeApp
+    path: str = Field("", max_length=400, description="A file from the app's recent list; empty = new blank file")
+
+
+class WordTypeArgs(_Args):
+    text: str = Field(min_length=1, max_length=2000, description="Dictated text inserted at the cursor in Word")
+
+
+class WordEditArgs(_Args):
+    action: Literal["new_paragraph", "delete_last_sentence", "read_last_paragraph", "undo"]
+
+
+class OfficeAppArgs(_Args):
+    app: OfficeApp
+
+
+class OfficeFinishArgs(_Args):
+    app: OfficeApp
+    mode: Literal["save", "close_discard"] = Field(description="save = overwrite the file; close_discard = close "
+                                                               "without saving")
+
+
+class SteamLaunchArgs(_Args):
+    appid: str = Field(pattern=r"^[0-9]{1,10}$", description="Steam app id of an installed game")
+
+
 # ---- Phase 3: AI coding agent (projects registered on PC2; edits only on an ai/* git branch) ----
 _REL_PATH_CHARS = re.compile(r"^[\w .\-\\/]{0,300}$")
 
@@ -281,6 +317,20 @@ TOOLS: dict[str, ToolSpec] = {
         ToolSpec("social_act", 3, SocialActArgs,
                  "Like, comment, follow, post or message on a social site (exact text approved on the phone)", 4,
                  llm=False),
+        # App flows step 5. Starting a stream goes public, overwriting/discarding a document loses work: approval.
+        ToolSpec("obs_control", 1, ObsArgs,
+                 "OBS: status, start/stop recording, stop streaming, switch scene", 4),
+        ToolSpec("obs_start_stream", 3, NoArgs, "OBS: start streaming (goes public, needs approval)", 4),
+        ToolSpec("office_open", 1, OfficeOpenArgs, "Open Word, Excel or PowerPoint with a recent file or a new one", 4,
+                 llm=False),
+        ToolSpec("word_type", 1, WordTypeArgs, "Insert dictated text at the cursor in Word", 4, llm=False),
+        ToolSpec("word_edit", 1, WordEditArgs,
+                 "Word: new paragraph, delete the last sentence, read back the last paragraph, undo", 4, llm=False),
+        ToolSpec("office_save_copy", 1, OfficeAppArgs,
+                 "Save the open Office file as a new copy (the original stays untouched)", 4, llm=False),
+        ToolSpec("office_finish", 3, OfficeFinishArgs,
+                 "Save over the open Office file, or close it without saving (needs approval)", 4, llm=False),
+        ToolSpec("steam_launch", 1, SteamLaunchArgs, "Start an installed Steam game", 4, llm=False),
         # App flows (redesign step 3): project discovery and confirm-once registration, wizard only.
         ToolSpec("find_projects", 0, NoArgs, "List git repos found in the owner's folders", 3, llm=False),
         ToolSpec("register_project", 3, RegisterProjectArgs,

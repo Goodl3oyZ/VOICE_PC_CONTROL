@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import type { Api, Job } from "../api";
 import { CodeChangesPanel } from "./CodeChangesPanel";
+import { VoiceAnswerButton } from "./VoiceAnswerButton";
 import {
   STATE_LABEL,
   STATE_DESC,
@@ -14,6 +15,7 @@ import {
   CheckCircleIcon,
   ClockIcon,
   CpuIcon,
+  MicIcon,
   ShieldAlertIcon,
   SparklesIcon,
   XIcon,
@@ -29,6 +31,7 @@ interface ActiveJobCardProps {
 
 export function ActiveJobCard({ job, api, onError, onUpdate, onNewJob }: ActiveJobCardProps) {
   const [answer, setAnswer] = useState("");
+  const [typing, setTyping] = useState(false);
   const sent = useRef(false);
 
   useEffect(() => {
@@ -102,25 +105,52 @@ export function ActiveJobCard({ job, api, onError, onUpdate, onNewJob }: ActiveJ
       {/* Clarification prompt */}
       {job.state === "clarifying" && job.question && (
         <div className="clarification-panel">
-          <div className="question-header">
-            <SparklesIcon size={16} />
-            <span className="question-title">More information needed:</span>
-          </div>
-          <p className="clarification-question">{job.question}</p>
-          <form className="clarification-form" onSubmit={handleClarifySubmit}>
-            <input
-              type="text"
-              value={answer}
-              onChange={(e) => setAnswer(e.target.value)}
-              placeholder="Type your answer in English…"
-              autoFocus
-              maxLength={1000}
-              className="clarification-input"
-            />
-            <button type="submit" className="clarification-submit" disabled={!answer.trim()}>
-              Reply
+          {job.clarify_kind === "stt_confirm" ? (
+            <>
+              <div className="question-header">
+                <MicIcon size={16} />
+                <span className="question-title">Not sure I heard you right</span>
+              </div>
+              <p className="clarification-heard">“{job.text}”</p>
+              <div className="clarify-actions">
+                <button type="button" className="btn-approve" onClick={() => act(api.reply(job.id, "yes"))}>
+                  <CheckCircleIcon size={18} />
+                  <span>Yes, do it</span>
+                </button>
+                <VoiceAnswerButton api={api} label="Say it again" className="clarify-voice"
+                  onText={(t) => act(api.reply(job.id, t))} onError={onError} />
+              </div>
+            </>
+          ) : (
+            <>
+              <div className="question-header">
+                <SparklesIcon size={16} />
+                <span className="question-title">More information needed:</span>
+              </div>
+              <p className="clarification-question">{job.question}</p>
+              <VoiceAnswerButton api={api} label="Answer by voice" className="clarify-voice"
+                onText={(t) => act(api.reply(job.id, t))} onError={onError} />
+            </>
+          )}
+          {typing || job.clarify_kind !== "stt_confirm" ? (
+            <form className="clarification-form" onSubmit={handleClarifySubmit}>
+              <input
+                type="text"
+                value={answer}
+                onChange={(e) => setAnswer(e.target.value)}
+                placeholder={job.clarify_kind === "stt_confirm" ? "Type the command…" : "Or type your answer…"}
+                maxLength={1000}
+                className="clarification-input"
+              />
+              <button type="submit" className="clarification-submit" disabled={!answer.trim()}>
+                Send
+              </button>
+            </form>
+          ) : (
+            <button type="button" className="clarify-type-link" onClick={() => setTyping(true)}>
+              Type it instead
             </button>
-          </form>
+          )}
         </div>
       )}
 

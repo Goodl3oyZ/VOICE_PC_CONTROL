@@ -22,7 +22,7 @@ MESSAGES: dict[str, dict[str, str]] = {
         "internal_error": "Internal error: {name}",
         "stt_timeout": "Speech recognition took too long",
         "no_speech": "No speech detected. Try again or type the command.",
-        "stt_confirm": 'I heard "{text}". Is that right? Answer "yes" or type the correct command.',
+        "stt_confirm": 'I heard "{text}". Is that right? Say or tap "yes", or say it again.',
         "clarify_default": "Could you tell me a bit more?",
         "no_tool": "There is no tool that can do this",
         "llm_invalid": "The AI returned an invalid answer, so nothing was run",
