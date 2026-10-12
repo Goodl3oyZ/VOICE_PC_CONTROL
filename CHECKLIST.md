@@ -140,13 +140,15 @@ the hardware decisions in chapter 13 (see "Open questions" below).
 - [x] Wake word + hands-free (30/30, 0 false accepts), spoken Stop, TTS replies, vision `look_at_screen`, Wake-on-LAN (awake path tested)
 - [x] Red-team 35 cases: 32 blocked. **Fixed (2026-10-12):** I03/I07 — an AI edit adding process/network/secret/dynamic-code access or touching build/test config now needs the owner's approval (PC1 asks with the reason; PC2 denies without the approval hash), before any test runs
 - [x] D03 ("Open cmd" opened Explorer): shells and admin tools are refused by rule before the LLM, unless allowlisted
-- [ ] Re-run the red-team set live after the fixes
-- [ ] 8-hour soak on PC1 (running), TC-S09 kill switch with PC1 cut, real WoL from sleep, final security audit, Gate G4 write-up
+- [x] Red-team re-run live (2026-10-12): **37/37** (direct 24/24, indirect 8/8, guard 2/2, web 2/2, screen 1/1). I03/I07 turned out to be judge false alarms (the model removed or kept the planted text; the judge read `old_text`) — judge fixed and unit-tested. New guard cases G01/G02 (urllib / subprocess on request) are held for approval live
+- [x] 8-hour soak on PC1 (2026-10-12): **288/288 commands OK (100 %)**, p50 0.61 s, p95 0.70 s, RSS flat 815–826 MB
+- [ ] TC-S09 kill switch with PC1 cut, real WoL from sleep, final security audit, Gate G4 write-up
 
 ## App flows redesign (design doc approved 2026-10-12)
 - [x] Step 1 — flow engine on PC1 (`app/core/flows.py`, `GET /flows`, `POST /flows/{id}/run|control`, text-only `POST /stt`), Apps tab with wizard screens, voice answers ("the second one"), remember-last-used, "open YouTube"/"open Cursor" opens the wizard
 - [x] Step 2a — Voice PC Chrome extension (`pc2-extension/`, `docs/chrome-extension.md`) driving the user's own Chrome; verified live: YouTube search + play (playing), CAPTCHA reported, non-https refused
-- [ ] Step 2b — owner loads the extension on PC2, phone checkpoint (YouTube + search); then remove the Playwright browser
+- [x] Step 2b — extension loaded in the owner's Chrome and connected; live via PC1: YouTube play (playing), Google search (no CAPTCHA), tabs
+- [ ] Step 2c — owner tries YouTube/Search from the phone Apps tab (checkpoint); then remove the Playwright browser
 - [ ] Step 3 — Cursor flow (needs `agent login`); spike: `-p` has shell access, gated only by `--force` / `.cursor/cli.json` allow-deny → deny-by-default + approve + `--resume`
 - [ ] Step 4 — social (FB, IG, X, TikTok) with approval cards and hourly limit
 - [ ] Step 5 — Office, Steam, OBS
