@@ -54,11 +54,13 @@ def collapse_repeats(text: str) -> str:
 
 class FasterWhisperSTT:
     def __init__(self, model: str = "small", device: str = "auto", compute_type: str = "int8",
-                 language: str | None = "th", initial_prompt: str | None = None):
+                 language: str | None = "th", initial_prompt: str | None = None,
+                 prompts: dict[str, str] | None = None):
         self._args = (model, device, compute_type)
         self.language = language
         # Biasing prompt with app names helps transliterated words (§3.1).
         self.initial_prompt = initial_prompt
+        self.prompts = prompts or {}  # per-language prompt when the phone asks for another language
         self._model: Any = None
         self._lock = threading.Lock()
 
@@ -73,15 +75,17 @@ class FasterWhisperSTT:
     def warm_up(self) -> None:
         self._load()
 
-    def _run(self, audio: bytes) -> Transcript:
+    def _run(self, audio: bytes, language: str | None = None) -> Transcript:
         model = self._load()
         samples = decode_audio(audio)
         if samples.size < SAMPLE_RATE // 10:  # < 0.1 s: nothing to transcribe
             return Transcript(text="", confidence=0.0)
         # condition_on_previous_text=False: short commands; avoids the "pause the music, pause the music, ..."
         # repetition loop seen in the 2026-10-12 benchmark
-        segments, info = model.transcribe(samples, language=self.language, vad_filter=True, beam_size=5,
-                                          initial_prompt=self.initial_prompt, condition_on_previous_text=False)
+        lang = language or self.language
+        prompt = self.prompts.get(lang, self.initial_prompt) if lang != self.language else self.initial_prompt
+        segments, info = model.transcribe(samples, language=lang, vad_filter=True, beam_size=5,
+                                          initial_prompt=prompt, condition_on_previous_text=False)
         texts, logprobs = [], []
         for seg in segments:
             texts.append(seg.text)
@@ -90,5 +94,5 @@ class FasterWhisperSTT:
         conf = math.exp(sum(logprobs) / len(logprobs)) if logprobs else 0.0
         return Transcript(text=text, confidence=round(conf, 3), lang=info.language)
 
-    async def transcribe(self, audio: bytes, mime: str) -> Transcript:
-        return await asyncio.to_thread(self._run, audio)
+    async def transcribe(self, audio: bytes, mime: str, language: str | None = None) -> Transcript:
+        return await asyncio.to_thread(self._run, audio, language)

@@ -1,6 +1,5 @@
 import { useState, type FormEvent } from "react";
 import { ApiError, type Api, type AuthState } from "../api";
-import { EnglishOnlyNotice } from "./EnglishOnlyNotice";
 import { KeyIcon, LaptopIcon, ShieldAlertIcon } from "./Icons";
 
 const AUTH_ERRORS: Record<string, string> = {
@@ -49,7 +48,6 @@ export function LoginScreen({ auth }: { auth: AuthState }) {
           <p className="instruction-foot">2) Enter the Secret Key once to pair this device (not needed again)</p>
         </div>
 
-        <EnglishOnlyNotice compact />
 
         {error && <div className="setup-error-msg">{error}</div>}
 

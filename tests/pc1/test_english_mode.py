@@ -4,7 +4,7 @@ from __future__ import annotations
 import pytest
 
 from app.adapters.ollama_llm import parse_message
-from app.core.i18n import is_english
+from app.core.i18n import is_english, is_english_or_thai
 from app.core.jobs import JobState
 from app.core.shortcuts import match_shortcut
 from app.ports import PlanResult
@@ -78,20 +78,43 @@ async def test_english_text_runs_with_english_summary(rig_factory):
     assert job.summary == "Opened Calculator"  # English display name, not the Thai one
 
 
-async def test_thai_text_rejected_in_english_mode(rig_factory):
+async def test_thai_text_accepted_in_english_mode(rig_factory):
+    """Owner feedback 2026-10-12: Thai song names and Thai commands must work; the phone shows the transcript
+    before sending, so Thai is no longer refused."""
     rig = rig_factory(language="en")
     job = await rig.run_text("เปิดโครม")
-    assert job.state == S.FAILED and job.outcome == "rejected_language"
-    assert job.error.startswith("Only English is supported") and rig.pc2.calls == [] and rig.llm.calls == []
+    assert job.outcome != "rejected_language"
 
 
-async def test_thai_speech_rejected_in_english_mode(rig_factory):
+@pytest.mark.parametrize("text,ok", [
+    ("play ลานดอกไม้", True), ("เปิด Chrome หน่อย", True), ("Open Chrome", True),
+    ("こんにちは", False), ("Открой хром", False), ("123", False),
+])
+def test_english_or_thai(text, ok):
+    assert is_english_or_thai(text) is ok
+
+
+async def test_other_languages_still_rejected(rig_factory):
     rig = rig_factory(language="en")
-    rig.stt.text, rig.stt.confidence = "เปิดโน้ตแพดให้หน่อย", 0.9
+    job = await rig.run_text("Открой хром")
+    assert job.state == S.FAILED and job.outcome == "rejected_language"
+    assert job.error.startswith("Only English or Thai") and rig.pc2.calls == [] and rig.llm.calls == []
+
+
+async def test_other_language_speech_rejected(rig_factory):
+    rig = rig_factory(language="en")
+    rig.stt.text, rig.stt.confidence = "こんにちは", 0.9
     job = await rig.orch.submit_audio(b"x", "audio/webm", "phone")
     await rig.orch.wait_idle()
     job = rig.orch.get_job(job.id)
     assert job.outcome == "rejected_language" and rig.pc2.calls == []
+
+
+async def test_stt_review_uses_the_phone_language(rig_factory):
+    rig = rig_factory(language="en")
+    rig.stt.text, rig.stt.confidence = "เล่นเพลง ลานดอกไม้", 0.8
+    assert await rig.orch.transcribe(b"x", "audio/webm", "th") == {"text": "เล่นเพลง ลานดอกไม้", "confidence": 0.8}
+    assert rig.stt.languages == ["th"] and rig.orch.list_jobs(10) == []  # review only: no job
 
 
 async def test_english_messages_for_errors(rig_factory):
@@ -99,8 +122,8 @@ async def test_english_messages_for_errors(rig_factory):
     rig.llm.script = [PlanResult(kind="clarify", message="Which app?")]
     job = await rig.orch.submit_text("open it", "phone")
     await rig.orch.wait_idle()
-    with pytest.raises(ValueError, match="Only English"):
-        await rig.orch.reply(job.id, "โครม", "phone")
+    with pytest.raises(ValueError, match="Only English or Thai"):
+        await rig.orch.reply(job.id, "Хром", "phone")
     await rig.orch.reply(job.id, "chrome", "phone")  # English answer accepted
     rig.pc2.offline = True
     job = await rig.run_text("open notepad")

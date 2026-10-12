@@ -33,7 +33,7 @@ class PlanResult:
 
 
 class STTPort(Protocol):
-    async def transcribe(self, audio: bytes, mime: str) -> Transcript: ...
+    async def transcribe(self, audio: bytes, mime: str, language: str | None = None) -> Transcript: ...
 
 
 class LLMPort(Protocol):

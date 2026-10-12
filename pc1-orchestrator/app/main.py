@@ -34,6 +34,12 @@ def stt_prompt(kb: Knowledge) -> str:
     return "Voice commands for a PC: open " + ", ".join(seen)[:500] + ". " + STT_WORDS
 
 
+def stt_prompt_th(kb: Knowledge) -> str:
+    """Thai prompt that keeps app names in English letters ("เปิด YouTube", not "เปิดยูทูป")."""
+    return ("คำสั่งคอมพิวเตอร์: เปิด YouTube เล่นเพลง ค้นหาใน Google เพลงถัดไป หยุดเพลง เพิ่มเสียง ปิดแท็บ "
+            "เปิด Chrome, Word, OBS, Steam, TikTok, Facebook, Instagram")
+
+
 def build(settings: Settings | None = None) -> FastAPI:
     s = settings or Settings()
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
@@ -49,7 +55,8 @@ def build(settings: Settings | None = None) -> FastAPI:
         stt = FasterWhisperSTT(s.whisper_model, device=s.stt_device, compute_type=s.whisper_compute,
                                language="en" if s.language == "en" else "th",
                                initial_prompt=stt_prompt(kb) if s.language == "en" else
-                               " ".join(kb.display(a) for a in kb.apps))
+                               " ".join(kb.display(a) for a in kb.apps),
+                               prompts={"en": stt_prompt(kb), "th": stt_prompt_th(kb)})
         stt.warm_up()  # load once at startup, not on the first command (§14.5 keep-warm)
     else:
         stt = FakeSTT("เปิดโน้ตแพด")

@@ -29,6 +29,21 @@ class OfficeError(Exception):
     pass
 
 
+LICENSE_CODES = {0x80048240}  # PowerPoint's bare "invalid request" once it drops to reduced-functionality mode
+
+
+def com_message(app: str, e: Exception) -> str:
+    """Office's COM error in plain words. An expired Office license lets the apps open but blocks creating
+    and changing files a few seconds after start (Excel says so; PowerPoint only returns 0x80048240)."""
+    detail = e.args[2] if len(e.args) > 2 and isinstance(e.args[2], tuple) else ()
+    text = str(detail[2] if len(detail) > 2 and detail[2] else e)
+    code = (detail[5] & 0xFFFFFFFF) if len(detail) > 5 and isinstance(detail[5], int) else None
+    if "license" in text.lower() or code in LICENSE_CODES:
+        return (f"Office's license on this PC has expired, so {REG_APP.get(app, app.title())} can't create or "
+                "change files (it can only show them). Activate Office on the PC to use this.")
+    return text[:200]
+
+
 def recent_files(limit: int = 8) -> dict[str, list[dict[str, str]]]:
     """Office's own recent-files lists (registry), newest first; only files that still exist."""
     if time.time() - _cache["at"] < 60:
@@ -115,7 +130,7 @@ def office_open(args: OfficeOpenArgs, ctx: ToolContext) -> ToolResult:
     except OfficeError as e:
         return ToolResult(ok=False, error=str(e))
     except Exception as e:  # noqa: BLE001 — COM errors carry Office's own message
-        return ToolResult(ok=False, error=f"{args.app.title()} could not open it: {str(e)[:200]}")
+        return ToolResult(ok=False, error=f"{REG_APP[args.app]} could not open it: {com_message(args.app, e)}")
     return ToolResult(ok=True, verified=True, data={"app": args.app, "file": name, "new": not args.path})
 
 
@@ -134,7 +149,7 @@ def word_type(args: WordTypeArgs, ctx: ToolContext) -> ToolResult:
     except OfficeError as e:
         return ToolResult(ok=False, error=str(e))
     except Exception as e:  # noqa: BLE001
-        return ToolResult(ok=False, error=f"Word: {str(e)[:200]}")
+        return ToolResult(ok=False, error=f"Word: {com_message('word', e)}")
     return ToolResult(ok=True, verified=grew >= len(args.text.strip()), data={"typed": len(args.text), "file": d.Name})
 
 
@@ -160,7 +175,7 @@ def word_edit(args: WordEditArgs, ctx: ToolContext) -> ToolResult:
     except OfficeError as e:
         return ToolResult(ok=False, error=str(e))
     except Exception as e:  # noqa: BLE001
-        return ToolResult(ok=False, error=f"Word: {str(e)[:200]}")
+        return ToolResult(ok=False, error=f"Word: {com_message('word', e)}")
     return ToolResult(ok=True, verified=True, data=data)
 
 
@@ -186,7 +201,7 @@ def office_save_copy(args: OfficeAppArgs, ctx: ToolContext) -> ToolResult:
     except OfficeError as e:
         return ToolResult(ok=False, error=str(e))
     except Exception as e:  # noqa: BLE001
-        return ToolResult(ok=False, error=f"{args.app.title()}: {str(e)[:200]}")
+        return ToolResult(ok=False, error=f"{REG_APP[args.app]}: {com_message(args.app, e)}")
     return ToolResult(ok=True, verified=target.exists(), data={"app": args.app, "saved_as": str(target)})
 
 
@@ -204,5 +219,5 @@ def office_finish(args: OfficeFinishArgs, ctx: ToolContext) -> ToolResult:
     except OfficeError as e:
         return ToolResult(ok=False, error=str(e))
     except Exception as e:  # noqa: BLE001
-        return ToolResult(ok=False, error=f"{args.app.title()}: {str(e)[:200]}")
+        return ToolResult(ok=False, error=f"{REG_APP[args.app]}: {com_message(args.app, e)}")
     return ToolResult(ok=True, verified=ok, data={"app": args.app, "mode": args.mode, "file": name})

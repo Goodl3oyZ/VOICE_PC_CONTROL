@@ -1,6 +1,7 @@
 import { useCallback, useState } from "react";
 import type { Api } from "../api";
 import { useRecorder } from "../useRecorder";
+import { getSpeechLang } from "../speechLang";
 import { MicIcon } from "./Icons";
 
 interface Props {
@@ -20,7 +21,7 @@ export function VoiceAnswerButton({ api, label, onText, onError, className = "" 
       setBusy(true);
       setNote(null);
       api
-        .transcribe(blob)
+        .transcribe(blob, getSpeechLang())
         .then(({ text }) => (text.trim() ? onText(text.trim()) : setNote("I didn't catch that, try again.")))
         .catch(onError)
         .finally(() => setBusy(false));

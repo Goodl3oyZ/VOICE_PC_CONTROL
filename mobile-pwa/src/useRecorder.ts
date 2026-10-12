@@ -13,7 +13,23 @@ export function useRecorder(onAudio: (blob: Blob) => void) {
   });
 
   const [volume, setVolume] = useState<number>(0);
-  const [mode, setMode] = useState<"hold" | "tap">("hold");
+  // Tap is the default: holding while talking was easy to cut short on a phone. The choice is remembered.
+  const [mode, setModeState] = useState<"hold" | "tap">(() => {
+    try {
+      return localStorage.getItem("vpc.mic_mode") === "hold" ? "hold" : "tap";
+    } catch {
+      return "tap";
+    }
+  });
+  const setMode = useCallback((m: "hold" | "tap") => {
+    try {
+      localStorage.setItem("vpc.mic_mode", m);
+    } catch {
+      /* per-device preference only */
+    }
+    setModeState(m);
+  }, []);
+  const maxTimer = useRef<number | undefined>(undefined);
 
   const recRef = useRef<MediaRecorder | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -101,6 +117,7 @@ export function useRecorder(onAudio: (blob: Blob) => void) {
     };
 
     rec.onstop = () => {
+      window.clearTimeout(maxTimer.current);
       cleanupAudioAnalysis();
       if (streamRef.current) {
         streamRef.current.getTracks().forEach((t) => t.stop());
@@ -127,6 +144,10 @@ export function useRecorder(onAudio: (blob: Blob) => void) {
     startedAt.current = Date.now();
     rec.start();
     setState("recording");
+    // The mic never stays on by itself: a forgotten tap stops after 20 s.
+    maxTimer.current = window.setTimeout(() => {
+      if (rec.state === "recording") rec.stop();
+    }, 20_000);
   }, [state, onAudio, setupAudioAnalysis, cleanupAudioAnalysis]);
 
   const stop = useCallback(() => {

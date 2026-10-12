@@ -4,6 +4,7 @@ import { applies, clearFrom, matchChoice, nextStage, resultsOf, startAnswers, st
 import { useRecorder } from "../useRecorder";
 import { ActiveJobCard } from "./ActiveJobCard";
 import { VoiceAnswerButton } from "./VoiceAnswerButton";
+import { getSpeechLang } from "../speechLang";
 import {
   ChevronLeftIcon,
   ChevronRightIcon,
@@ -202,7 +203,7 @@ function FlowWizard({ api, flow, jobs, onClose, onJob, onUpdate, onError }: Wiza
     (blob: Blob) => {
       if (!stage) return;
       api
-        .transcribe(blob)
+        .transcribe(blob, getSpeechLang())
         .then(({ text: said }) => {
           if (stage.kind === "text") {
             if (said) answer(stage, said);

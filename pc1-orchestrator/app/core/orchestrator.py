@@ -31,7 +31,7 @@ from ..ports import (
 from .aliases import AliasNormalizer
 from .capabilities import help_summary, is_help
 from .flows import FLOWS, control_command, flow_trigger, followup_call, public_flows, resolve
-from .i18n import YES_WORDS, Messages, is_english
+from .i18n import YES_WORDS, Messages, is_english_or_thai
 from .jobs import Job, JobState, new_job_id
 from .knowledge import Knowledge
 from .policy import PolicyContext, RateLimiter, decide
@@ -137,14 +137,14 @@ class Orchestrator:
         call = followup_call(flow_id, text, answers, self.kb, self.pc2_status)
         return await self.submit_text(call.rationale, device, flow=flow_id, preset=call)
 
-    async def transcribe(self, audio: bytes, mime: str) -> str:
+    async def transcribe(self, audio: bytes, mime: str, language: str | None = None) -> dict[str, Any]:
         """Voice answer to a wizard stage: text only, no job, nothing stored (like ignored hands-free speech).
         One at a time: speech recognition is the heaviest thing PC1 does."""
         if self._stt_lock.locked():
             raise Conflict("still listening to the previous answer")
         async with self._stt_lock:
-            tr = await asyncio.wait_for(self.stt.transcribe(audio, mime), self.cfg.stt_timeout_s)
-        return tr.text.strip()
+            tr = await asyncio.wait_for(self.stt.transcribe(audio, mime, language), self.cfg.stt_timeout_s)
+        return {"text": tr.text.strip(), "confidence": tr.confidence}
 
     async def submit_audio(self, audio: bytes, mime: str, device: str) -> Job:
         job = Job(id=new_job_id(self.clock()), device=device, source="audio",
@@ -396,8 +396,9 @@ class Orchestrator:
         await self._plan_loop(job)
 
     def _language_ok(self, text: str) -> bool:
-        """English-only mode: reject other languages instead of guessing (Whisper is weak in Thai here)."""
-        return self.cfg.language != "en" or is_english(text)
+        """English mode also takes Thai (the phone shows what was heard before sending); other languages are
+        rejected instead of guessed."""
+        return self.cfg.language != "en" or is_english_or_thai(text)
 
     async def _resume_planning(self, job: Job) -> None:
         await self._plan_loop(job)

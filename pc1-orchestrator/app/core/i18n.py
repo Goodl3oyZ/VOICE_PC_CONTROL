@@ -9,7 +9,7 @@ import re
 
 MESSAGES: dict[str, dict[str, str]] = {
     "en": {
-        "only_english": "Only English is supported. Please say or type your command in English.",
+        "only_english": "Only English or Thai is supported. Please say or type your command in English or Thai.",
         "confirm_expired": "Confirmation timed out",
         "not_approved": "Not approved by the user",
         "args_mismatch": "Parameters differ from the confirmation card, so nothing was run",
@@ -37,7 +37,7 @@ MESSAGES: dict[str, dict[str, str]] = {
         "clarify_expired": "No answer in time, cancelled automatically",
     },
     "th": {
-        "only_english": "รองรับเฉพาะภาษาอังกฤษ กรุณาพูดหรือพิมพ์คำสั่งเป็นภาษาอังกฤษ",
+        "only_english": "รองรับเฉพาะภาษาอังกฤษหรือไทย กรุณาพูดหรือพิมพ์คำสั่งเป็นภาษาอังกฤษหรือไทย",
         "confirm_expired": "หมดเวลายืนยัน",
         "not_approved": "ผู้ใช้ไม่อนุมัติ",
         "args_mismatch": "พารามิเตอร์ไม่ตรงกับที่แสดงในการ์ดยืนยัน จึงไม่ทำงาน",
@@ -79,6 +79,15 @@ def is_english(text: str, min_ratio: float = 0.85) -> bool:
         return False
     ascii_letters = sum(1 for ch in letters if ch.isascii())
     return ascii_letters / len(letters) >= min_ratio
+
+
+def is_english_or_thai(text: str, min_ratio: float = 0.85) -> bool:
+    """English, Thai, or both mixed ("play ลานดอกไม้"): other scripts are still refused."""
+    letters = _LETTER.findall(text)
+    if not letters:
+        return False
+    ok = sum(1 for ch in letters if ch.isascii() or "\u0e00" <= ch <= "\u0e7f")
+    return ok / len(letters) >= min_ratio
 
 
 class Messages:

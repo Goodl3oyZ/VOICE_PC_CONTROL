@@ -145,3 +145,13 @@ def test_office_copy_never_overwrites(tmp_path):
 def test_office_mru_line_format():
     m = office._MRU_ITEM.search("[F00000000][T01DD1613C41E1B40][O00000000]*C:\\Users\\me\\Docs\\Plan.docx")
     assert m and Path(m["path"]).name == "Plan.docx"
+
+
+def test_office_expired_license_is_explained():
+    """Owner test 2026-10-12: PowerPoint and Excel failed with raw COM errors; the Office license had expired."""
+    def com(text, code):
+        return Exception(-2147352567, "Exception occurred.", (0, "Microsoft Excel", text, None, 0, code), None)
+    excel = com("This command is unavailable because the license to use this application has expired.", -2146827284)
+    assert "license on this PC has expired" in office.com_message("excel", excel)
+    assert "PowerPoint can't create" in office.com_message("powerpoint", com(None, -2147188160))
+    assert office.com_message("word", com("The file is read-only.", -2146822850)) == "The file is read-only."

@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import type { JobState } from "../api";
 import type { HandsFreeState } from "../useHandsFree";
+import type { SpeechLang } from "../speechLang";
 import { AIOrb, type OrbState } from "./AIOrb";
 import { MonitorIcon, PlayPauseIcon, SkipIcon, VolumeIcon } from "./Icons";
 
@@ -28,6 +29,8 @@ interface MicrophoneHeroProps {
   onMicMode: (m: MicMode) => void;
   speakOn: boolean;
   onToggleSpeak: () => void;
+  speechLang: SpeechLang;
+  onSpeechLang: (l: SpeechLang) => void;
   onExecuteCommand: (command: string) => void;
 }
 
@@ -48,7 +51,7 @@ function status(p: MicrophoneHeroProps): { title: string; sub: string; tone: str
   if (mic.state === "insecure") return { title: "Microphone needs HTTPS", sub: "Open the app from its https:// address", tone: "error" };
   if (mic.state === "unsupported") return { title: "No microphone here", sub: "Type your command below instead", tone: "warn" };
   if (mic.state === "recording") {
-    return { title: "Listening…", sub: mic.mode === "hold" ? "Release to send" : "Tap the orb again to send", tone: "live" };
+    return { title: "Listening…", sub: mic.mode === "hold" ? "Let go when you finish" : "Tap the orb again when you finish", tone: "live" };
   }
   if (js === "clarifying") return { title: "Waiting for your answer", sub: "Answer the question above", tone: "warn" };
   if (js === "awaiting_confirm") return { title: "Waiting for your approval", sub: "Approve or cancel above", tone: "warn" };
@@ -65,13 +68,14 @@ function status(p: MicrophoneHeroProps): { title: string; sub: string; tone: str
   }
   return {
     title: "Ready",
-    sub: micMode === "hold" ? "Hold the orb and speak in English" : "Tap the orb, speak, tap again to send",
+    sub: `${micMode === "hold" ? "Hold the orb while you talk" : "Tap the orb, talk, tap again"} · you check it before it runs`,
     tone: "ready",
   };
 }
 
 export function MicrophoneHero(props: MicrophoneHeroProps) {
-  const { mic, orbState, micMode, onMicMode, speakOn, onToggleSpeak, onExecuteCommand, currentJobText, currentJobState } = props;
+  const { mic, orbState, micMode, onMicMode, speakOn, onToggleSpeak, onExecuteCommand, currentJobText, currentJobState,
+    speechLang, onSpeechLang } = props;
   const recording = mic.state === "recording";
   const micUsable = mic.state === "idle" || recording;
   const s = status(props);
@@ -112,10 +116,15 @@ export function MicrophoneHero(props: MicrophoneHeroProps) {
         ? {
             onPointerDown: (e: React.PointerEvent) => {
               e.preventDefault();
+              // Keep the pointer even if the finger slides off the orb: sliding used to cut the recording short
+              try {
+                e.currentTarget.setPointerCapture(e.pointerId);
+              } catch {
+                /* older browsers: still works while the finger stays on the orb */
+              }
               void mic.start();
             },
             onPointerUp: mic.stop,
-            onPointerLeave: mic.stop,
             onPointerCancel: mic.stop,
           }
         : { onClick: mic.toggle };
@@ -154,6 +163,25 @@ export function MicrophoneHero(props: MicrophoneHeroProps) {
               aria-checked={micMode === m}
               className={`mode-pill ${micMode === m ? "active" : ""}`}
               onClick={() => onMicMode(m)}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+        <div className="mode-switch-group lang-switch" role="radiogroup" aria-label="Language you speak">
+          {(
+            [
+              ["en", "English"],
+              ["th", "ไทย"],
+            ] as const
+          ).map(([l, label]) => (
+            <button
+              key={l}
+              type="button"
+              role="radio"
+              aria-checked={speechLang === l}
+              className={`mode-pill ${speechLang === l ? "active" : ""}`}
+              onClick={() => onSpeechLang(l)}
             >
               {label}
             </button>

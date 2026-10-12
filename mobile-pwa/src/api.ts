@@ -150,11 +150,12 @@ export class Api {
     this.req<Job>("POST", `/flows/${encodeURIComponent(id)}/control`, JSON.stringify({ index, answers }));
   flowFollowup = (id: string, text: string, answers: Record<string, string>) =>
     this.req<Job>("POST", `/flows/${encodeURIComponent(id)}/followup`, JSON.stringify({ text, answers }));
-  /** Voice answer for a wizard stage: text only, PC1 creates no job. */
-  transcribe = (blob: Blob) => {
+  /** Speech to text only (PC1 creates no job): reviewed on the phone before sending, or a wizard answer. */
+  transcribe = (blob: Blob, lang: "en" | "th" = "en") => {
     const form = new FormData();
     form.append("audio", blob, `answer.${blob.type.includes("mp4") ? "m4a" : "webm"}`);
-    return this.req<{ text: string }>("POST", "/stt", form, false);
+    form.append("lang", lang);
+    return this.req<{ text: string; confidence: number }>("POST", "/stt", form, false);
   };
 
   me = () => this.req<AuthState>("GET", "/auth/me");

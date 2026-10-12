@@ -89,7 +89,7 @@ def _media_or_search(text: str) -> ToolCall | None:
     m = _SEARCH.match(t)
     if m and m["q"].strip():
         verb, q, site = m["verb"].lower(), m["q"].strip()[:200], (m["site"] or "").lower()
-        if verb == "play" and site in ("", "youtube"):  # actually play it, not just list results
+        if verb in ("play", "เล่นเพลง", "เปิดเพลง") and site in ("", "youtube"):  # play it, not just list results
             return ToolCall(tool="youtube_play", arguments={"query": q}, rationale="shortcut: play")
         if " ".join(verb.split()) in _EN_READ_VERBS and not site:
             return ToolCall(tool="web_search", arguments={"query": q, "max_results": 5, "site": "web"},

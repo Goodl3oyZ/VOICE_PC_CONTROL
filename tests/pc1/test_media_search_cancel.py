@@ -35,7 +35,6 @@ def test_media_shortcuts(kb, text, action, steps):
 @pytest.mark.parametrize("text,query,site", [
     ("ค้นหาวิธีติดตั้ง docker บน windows", "วิธีติดตั้ง docker บน windows", "web"),
     ("หา lofi ใน youtube", "lofi", "youtube"),
-    ("เปิดเพลง ลาลาลอย", "ลาลาลอย", "youtube"),
     ("หาเพลง bodyslam หน่อย", "bodyslam", "youtube"),
 ])
 def test_search_shortcuts(kb, text, query, site):

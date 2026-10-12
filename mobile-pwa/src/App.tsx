@@ -16,7 +16,8 @@ import { SessionModal } from "./components/SessionModal";
 import { CommandGuide } from "./components/CommandGuide";
 import { OfflineBanner } from "./components/OfflineBanner";
 import { InstallPrompt } from "./components/InstallPrompt";
-import { EnglishOnlyNotice } from "./components/EnglishOnlyNotice";
+import { HeardReview, type Heard } from "./components/HeardReview";
+import { useSpeechLang } from "./speechLang";
 import { AppsTab } from "./components/AppsTab";
 import { BottomNav, type NavTab } from "./components/BottomNav";
 import type { OrbState } from "./components/AIOrb";
@@ -253,7 +254,28 @@ function Remote({ api, email, theme, onToggleTheme, onSessionLost, onLogout, onU
     [handleError, track],
   );
 
-  const onAudio = useCallback((blob: Blob) => submit(api.sendAudio(blob)), [api, submit]);
+  // Voice: PC1 only transcribes; the phone shows what it heard and nothing runs until Send (owner feedback
+  // 2026-10-12: commands ran on misheard words).
+  const [speechLang, setSpeechLang] = useSpeechLang();
+  const [heard, setHeard] = useState<Heard | "listening" | { error: string } | null>(null);
+  const onAudio = useCallback(
+    (blob: Blob) => {
+      setHeard("listening");
+      api
+        .transcribe(blob, speechLang)
+        .then((r) =>
+          setHeard(r.text.trim() ? r : { error: "I didn't hear any words. Hold the orb the whole time you talk." }),
+        )
+        .catch((e: unknown) => {
+          if (e instanceof ApiError && e.status === 401) {
+            setHeard(null);
+            return handleError(e);
+          }
+          setHeard({ error: `Couldn't listen: ${e instanceof Error ? e.message : String(e)}` });
+        });
+    },
+    [api, speechLang, handleError],
+  );
   const mic = useRecorder(onAudio);
   const micRecording = useRef(false);
   micRecording.current = mic.state === "recording";
@@ -320,6 +342,7 @@ function Remote({ api, email, theme, onToggleTheme, onSessionLost, onLogout, onU
     if (mic.state === "denied" || mic.state === "insecure") return "error";
     if (mic.state === "recording") return "listening";
     if (handsFree.state === "hearing" || handsFree.state === "armed") return "listening";
+    if (heard === "listening") return "processing";
     if (flash) return flash;
     if (activeJob?.state === "transcribing" || activeJob?.state === "planning" || activeJob?.state === "routing") {
       return "processing";
@@ -333,7 +356,7 @@ function Remote({ api, email, theme, onToggleTheme, onSessionLost, onLogout, onU
       return "executing";
     }
     return "idle";
-  }, [wsUp, pc2Online, mic.state, handsFree.state, flash, activeJob?.state]);
+  }, [wsUp, pc2Online, mic.state, handsFree.state, heard, flash, activeJob?.state]);
 
   const handleEmergencyStop = () => {
     api
@@ -367,9 +390,6 @@ function Remote({ api, email, theme, onToggleTheme, onSessionLost, onLogout, onU
       {/* PWA Install Promotion Banner */}
       <InstallPrompt />
 
-      {/* Voice/text commands are accepted in English only */}
-      <EnglishOnlyNotice />
-
       {/* Tabbed Content View */}
       <main className="app-main-layout">
         {navTab === "home" && (
@@ -386,6 +406,23 @@ function Remote({ api, email, theme, onToggleTheme, onSessionLost, onLogout, onU
                     setSelectedJob(j);
                   }}
                   onNewJob={submit}
+                />
+              </section>
+            )}
+
+            {heard && mic.state !== "recording" && (
+              <section className="heard-section" aria-label="What you said">
+                <HeardReview
+                  heard={heard}
+                  onSend={(t) => {
+                    setHeard(null);
+                    submit(api.sendText(t));
+                  }}
+                  onRetry={() => {
+                    setHeard(null);
+                    if (mic.mode === "tap") void mic.start();
+                  }}
+                  onCancel={() => setHeard(null)}
                 />
               </section>
             )}
@@ -414,6 +451,8 @@ function Remote({ api, email, theme, onToggleTheme, onSessionLost, onLogout, onU
                 }}
                 speakOn={speakOn}
                 onToggleSpeak={toggleSpeak}
+                speechLang={speechLang}
+                onSpeechLang={setSpeechLang}
                 onExecuteCommand={(cmd) => submit(api.sendText(cmd))}
               />
             </section>

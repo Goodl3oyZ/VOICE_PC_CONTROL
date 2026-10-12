@@ -401,7 +401,10 @@ def control_command(flow_id: str, index: int, answers: dict[str, str], kb: Knowl
         checked = _checked(f, answers, kb, pc2)
         if c.when and checked.get(c.when[0]) not in c.when[1]:
             raise FlowError("that control does not apply here")
-        return _check(c.call(checked))
+        call = _check(c.call(checked))
+        if not call.rationale:  # the history shows this text: "Word: Close without saving", not "office_finish"
+            call = call.model_copy(update={"rationale": f"{f.title}: {c.label}"})
+        return call
     cmd = c.command
     for key in re.findall(r"\{(\w+)\}", cmd):
         stage = next((s for s in f.stages if s.id == key), None)

@@ -10,7 +10,7 @@ from collections.abc import AsyncIterator
 from pathlib import Path
 from typing import Annotated, Any
 
-from fastapi import Depends, FastAPI, File, HTTPException, Query, Request, UploadFile, WebSocket
+from fastapi import Depends, FastAPI, File, Form, HTTPException, Query, Request, UploadFile, WebSocket
 from fastapi.responses import JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
@@ -202,11 +202,13 @@ def create_app(orch: Orchestrator, store: SqliteStore, broadcaster: Broadcaster,
             raise HTTPException(422, str(e)) from e
 
     @app.post("/stt")
-    async def stt(_: Device, audio: UploadFile = File(...)) -> dict[str, str]:
-        """Voice answer for a wizard stage: returns the text only (no job, not stored)."""
+    async def stt(_: Device, audio: UploadFile = File(...),
+                  lang: str = Form("en", pattern="^(en|th)$")) -> dict[str, Any]:
+        """Speech to text only (no job, not stored): the phone shows it for review before sending, and wizard
+        stages use it for voice answers."""
         data, ctype = await _read_audio(audio)
         try:
-            return {"text": await orch.transcribe(data, ctype)}
+            return await orch.transcribe(data, ctype, lang)
         except TimeoutError as e:
             raise HTTPException(504, "speech recognition took too long") from e
 

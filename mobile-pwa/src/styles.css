@@ -4173,3 +4173,118 @@ a.btn-setup-submit { text-decoration: none; display: flex; justify-content: cent
   color: var(--text-secondary);
   overflow-wrap: anywhere;
 }
+
+/* ---- Review before send (owner feedback 2026-10-12): what PC1 heard, editable, nothing runs until Send ---- */
+html, body {
+  overscroll-behavior-y: none; /* no pull-to-refresh or page bounce while using the orb */
+}
+
+.heard-section {
+  margin-bottom: 12px;
+}
+
+.heard-review {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 14px;
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--cyan-border);
+  background: var(--bg-card);
+  box-shadow: var(--shadow-card);
+}
+
+.heard-review.is-unsure {
+  border-color: var(--color-warning-border);
+}
+
+.heard-review.is-error {
+  border-color: var(--color-danger-border);
+}
+
+.heard-review.is-busy .heard-label {
+  color: var(--text-secondary);
+}
+
+.heard-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.heard-label {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.heard-review.is-unsure .heard-label {
+  color: var(--color-warning);
+}
+
+.heard-x {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border: none;
+  border-radius: var(--radius-full);
+  background: transparent;
+  color: var(--text-secondary);
+}
+
+.heard-text {
+  width: 100%;
+  resize: none;
+  padding: 10px 12px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-medium);
+  background: var(--bg-surface);
+  color: var(--text-primary);
+  font: inherit;
+  font-size: 1.1rem; /* >= 16px: iOS does not zoom in when editing */
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+.heard-hint {
+  margin: 0;
+  font-size: 0.78rem;
+  color: var(--text-muted);
+}
+
+.heard-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.heard-btn {
+  flex: 1 1 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 46px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-medium);
+  background: var(--bg-elevated);
+  color: var(--text-primary);
+  font-weight: 700;
+  font-size: 0.95rem;
+}
+
+.heard-send {
+  background: var(--cyan-primary);
+  border-color: var(--cyan-primary);
+  color: var(--text-inverse);
+}
+
+.heard-send:disabled {
+  opacity: 0.5;
+}
+
+.lang-switch .mode-pill {
+  min-width: 84px;
+}

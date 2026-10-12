@@ -140,7 +140,7 @@ def test_stt_endpoint_returns_text_and_creates_no_job(api):
     rig.stt.text = "the second one"
     before = len(client.get("/jobs").json())
     r = client.post("/stt", files={"audio": ("a.webm", b"\x1a\x45", "audio/webm")})
-    assert r.status_code == 200 and r.json() == {"text": "the second one"}
+    assert r.status_code == 200 and r.json() == {"text": "the second one", "confidence": 0.95}
     assert len(client.get("/jobs").json()) == before
     assert client.post("/stt", files={"audio": ("a.txt", b"x", "text/plain")}).status_code == 415
 
@@ -364,3 +364,18 @@ def test_step5_summaries_say_what_happened(kb):
     closed = r(app="word", mode="close_discard", file="Document1")
     want = "Closed Document1 without saving"
     assert summarize("office_finish", {"app": "word", "mode": "close_discard"}, closed, kb, "en") == want
+
+
+def test_controls_show_a_readable_name_in_the_history(kb):
+    """Owner test 2026-10-12: the history listed "office_finish" and "obs_control"."""
+    from app.core.flows import FLOWS, control_command
+    for fid, f in FLOWS.items():
+        for i, c in enumerate(f.controls):
+            if c.call is None:
+                continue
+            answers = {"app": "word"} if c.when else {}
+            try:
+                call = control_command(fid, i, answers, kb)
+            except Exception:  # noqa: BLE001, S112 — needs answers this test does not give
+                continue
+            assert call.rationale and call.rationale != call.tool, (fid, c.label)

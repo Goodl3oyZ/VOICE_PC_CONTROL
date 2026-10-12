@@ -17,7 +17,10 @@ class FakeSTT:
                  by_audio: dict[bytes, tuple[str, float]] | None = None):
         self.text, self.confidence, self.by_audio = text, confidence, by_audio or {}
 
-    async def transcribe(self, audio: bytes, mime: str) -> Transcript:
+        self.languages: list[str | None] = []
+
+    async def transcribe(self, audio: bytes, mime: str, language: str | None = None) -> Transcript:
+        self.languages.append(language)
         text, conf = self.by_audio.get(audio, (self.text, self.confidence))
         return Transcript(text=text, confidence=conf)
 
