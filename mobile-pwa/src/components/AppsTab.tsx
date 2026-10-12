@@ -39,10 +39,22 @@ interface AppsTabProps {
   onJob: (job: Job) => void;
   onUpdate: (job: Job) => void;
   onError: (e: unknown) => void;
+  chromeConnected?: boolean | null; // from PC2 status: is the Voice PC extension connected?
+}
+
+const CHROME_FLOWS = new Set(["youtube", "music", "search"]);
+
+function ChromeHint() {
+  return (
+    <p className="apps-notice" role="status">
+      Chrome on the PC isn't connected, so YouTube and search won't work yet. Open Chrome on the PC and check that
+      the Voice PC extension is on.
+    </p>
+  );
 }
 
 /** Apps tab: tiles grouped by kind; a tile opens its guided flow (redesign step 1). */
-export function AppsTab({ api, jobs, openFlow, onOpened, onJob, onUpdate, onError }: AppsTabProps) {
+export function AppsTab({ api, jobs, openFlow, onOpened, onJob, onUpdate, onError, chromeConnected }: AppsTabProps) {
   const [flows, setFlows] = useState<FlowDef[] | null>(null);
   const [current, setCurrent] = useState<FlowDef | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -67,19 +79,22 @@ export function AppsTab({ api, jobs, openFlow, onOpened, onJob, onUpdate, onErro
 
   if (current) {
     return (
-      <FlowWizard
-        key={current.id}
-        api={api}
-        flow={current}
-        jobs={jobs}
-        onClose={() => {
-          setCurrent(null);
-          load(); // remembered answers (last project, music app) may have changed
-        }}
-        onJob={onJob}
-        onUpdate={onUpdate}
-        onError={onError}
-      />
+      <>
+        {chromeConnected === false && CHROME_FLOWS.has(current.id) && <ChromeHint />}
+        <FlowWizard
+          key={current.id}
+          api={api}
+          flow={current}
+          jobs={jobs}
+          onClose={() => {
+            setCurrent(null);
+            load(); // remembered answers (last project, music app) may have changed
+          }}
+          onJob={onJob}
+          onUpdate={onUpdate}
+          onError={onError}
+        />
+      </>
     );
   }
 
@@ -89,6 +104,7 @@ export function AppsTab({ api, jobs, openFlow, onOpened, onJob, onUpdate, onErro
         <h2>Apps</h2>
         <p>Pick an app, or just say its name (“YouTube”, “open Cursor”).</p>
       </div>
+      {chromeConnected === false && <ChromeHint />}
       {flows === null && <p className="apps-loading">Loading apps…</p>}
       {groups.map(([group, list]) => (
         <section key={group} className="apps-group" aria-label={group}>

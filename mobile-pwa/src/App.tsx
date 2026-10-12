@@ -441,6 +441,7 @@ function Remote({ api, email, theme, onToggleTheme, onSessionLost, onLogout, onU
               onJob={track}
               onUpdate={(j) => setJobs((l) => upsertJob(l, j))}
               onError={handleError}
+              chromeConnected={pc2Online === false ? null : (pc2Data?.chrome_connected as boolean | null | undefined)}
             />
           </div>
         )}
