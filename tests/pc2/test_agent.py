@@ -242,3 +242,21 @@ def test_media_rejected_with_kill_switch(agent, launcher):
 
 def test_signature_helper_is_deterministic():
     assert sign(SECRET, "post", "/a", "1", "n", b"") == sign(SECRET, "POST", "/a", "1", "n", b"")
+
+
+def test_social_actions_need_approval_and_have_an_hourly_limit(tmp_path):
+    from agent.config import AgentConfig
+    from agent.policy import AgentPolicy, KillSwitch
+    cfg = AgentConfig.from_dict({"data_dir": str(tmp_path), "social_limit_per_hour": 2, "rate_limit_per_min": 100})
+    now = [0.0]
+    pol = AgentPolicy(cfg, KillSwitch(tmp_path / "k"), clock=lambda: now[0])
+    like = {"platform": "x", "action": "like"}
+    full = {"platform": "x", "action": "like", "text": "", "to": ""}
+    assert "approval" in pol.check("social_act", like).reason
+    ok = args_hash("social_act", full)
+    assert pol.check("social_act", like, ok).ok and pol.check("social_act", like, ok).ok
+    assert "social limit" in pol.check("social_act", like, ok).reason
+    fb = {"platform": "facebook", "action": "like", "text": "", "to": ""}
+    assert pol.check("social_act", fb, args_hash("social_act", fb)).ok  # per platform
+    now[0] = 3601
+    assert pol.check("social_act", like, ok).ok

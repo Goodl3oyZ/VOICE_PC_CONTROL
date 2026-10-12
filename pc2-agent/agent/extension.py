@@ -31,6 +31,19 @@ GOOGLE_HOST = "google.com"
 GOOGLE_SEARCH_URL = "https://www.google.com/search?q="
 YT_HOST = "youtube.com"
 YT_SEARCH_URL = "https://www.youtube.com/results?search_query="
+SOCIAL_HOSTS = {"facebook": "facebook.com", "instagram": "instagram.com", "x": "x.com", "tiktok": "tiktok.com"}
+SOCIAL_URLS = {  # fixed templates; {q} is URL-quoted, {h} is a checked account name
+    "facebook": {"feed": "https://www.facebook.com/", "search": "https://www.facebook.com/search/top?q={q}",
+                 "profile": "https://www.facebook.com/{h}", "messages": "https://www.facebook.com/messages/",
+                 "notifications": "https://www.facebook.com/notifications"},
+    "instagram": {"feed": "https://www.instagram.com/", "search": "https://www.instagram.com/explore/search/keyword/?q={q}",
+                  "profile": "https://www.instagram.com/{h}/", "messages": "https://www.instagram.com/direct/inbox/",
+                  "reels": "https://www.instagram.com/reels/"},
+    "x": {"feed": "https://x.com/home", "search": "https://x.com/search?q={q}", "profile": "https://x.com/{h}",
+          "messages": "https://x.com/messages", "notifications": "https://x.com/notifications"},
+    "tiktok": {"foryou": "https://www.tiktok.com/foryou", "following": "https://www.tiktok.com/following",
+               "search": "https://www.tiktok.com/search?q={q}", "profile": "https://www.tiktok.com/@{h}"},
+}
 NOT_CONNECTED = ("Chrome on PC2 is not connected: open Chrome and check that the Voice PC extension is on "
                  "(chrome://extensions)")
 
@@ -241,6 +254,51 @@ class ExtensionBrowser:
             tabs = self._tabs()
         return {"tabs": [{"title": str(t.get("title") or "")[:120], "host": _host(str(t.get("url", "")))}
                          for t in tabs]}
+
+    # ---------------------------------------------------------------- social (step 4)
+    def _social_tab(self, platform: str) -> dict[str, Any] | None:
+        """The tab the user is looking at if it is on that site, else the most recent tab on it."""
+        tabs = self._tabs()
+        host = SOCIAL_HOSTS[platform]
+        on = [t for t in tabs if _host(t["url"]) == host or _host(t["url"]).endswith("." + host)]
+        return next((t for t in on if t.get("active")), on[-1] if on else None)
+
+    def social_url(self, platform: str, page: str, query: str = "") -> str:
+        tpl = SOCIAL_URLS[platform][page]
+        handle = query.lstrip("@")
+        if page == "profile" and not handle:
+            raise BrowserError("which account? say the account name")
+        return tpl.format(q=quote_plus(query), h=handle)
+
+    def _logged_in(self, tab: dict[str, Any], platform: str) -> None:
+        st = self.bridge.call("social.state", tabId=tab["id"]) or {}
+        if not st.get("loggedIn", True):
+            raise BrowserError(f"{platform.title()} is not logged in on the PC: log in there yourself "
+                               "(the agent never types passwords)")
+
+    def social_open(self, platform: str, page: str, query: str = "") -> dict[str, Any]:
+        tab = self._open(self.social_url(platform, page, query), self._social_tab(platform))
+        self._logged_in(tab, platform)
+        return {"platform": platform, "page": page, "title": str(tab.get("title", ""))[:200],
+                "url": str(tab.get("url", ""))[:500]}
+
+    def social_act(self, platform: str, action: str, text: str = "", to: str = "",
+                   dry: bool = False) -> dict[str, Any]:
+        tab = self._social_tab(platform)
+        if action == "post" and platform == "x":
+            tab = self._open("https://x.com/compose/post", tab)
+        elif action == "post" and platform == "facebook":
+            tab = self._open("https://www.facebook.com/", tab)
+        elif action == "message" and platform == "facebook":
+            tab = self._open(f"https://www.facebook.com/messages/t/{to.lstrip('@')}", tab)
+        elif action == "message":
+            tab = self._open(self.social_url(platform, "profile", to), tab)
+        if tab is None:
+            raise BrowserError(f"open the {platform.title()} post or profile first")
+        self._logged_in(tab, platform)
+        r = dict(self.bridge.call("social.act", tabId=tab["id"], platform=platform, action=action, text=text,
+                                  dry=dry, timeout=40) or {})
+        return {"platform": platform, "action": action, "url": str(tab.get("url", ""))[:500], **r}
 
     def close(self) -> None:
         """Nothing to close: it is the user's own Chrome."""

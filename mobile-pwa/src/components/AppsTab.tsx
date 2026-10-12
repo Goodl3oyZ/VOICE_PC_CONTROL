@@ -42,12 +42,12 @@ interface AppsTabProps {
   chromeConnected?: boolean | null; // from PC2 status: is the Voice PC extension connected?
 }
 
-const CHROME_FLOWS = new Set(["youtube", "music", "search"]);
+const CHROME_FLOWS = new Set(["youtube", "music", "search", "tiktok", "facebook", "instagram", "x"]);
 
 function ChromeHint() {
   return (
     <p className="apps-notice" role="status">
-      Chrome on the PC isn't connected, so YouTube and search won't work yet. Open Chrome on the PC and check that
+      Chrome on the PC isn't connected, so YouTube, search and social apps won't work yet. Open Chrome on the PC and check that
       the Voice PC extension is on.
     </p>
   );

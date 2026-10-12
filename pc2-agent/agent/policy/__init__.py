@@ -10,7 +10,7 @@ from pathlib import Path
 from pydantic import BaseModel, ValidationError
 
 from voice_contracts.code_safety import risky_edit
-from voice_contracts.tools import TOOLS, args_hash, host_allowed
+from voice_contracts.tools import SOCIAL_PLATFORMS, TOOLS, args_hash, host_allowed
 
 from ..config import AgentConfig
 
@@ -61,6 +61,7 @@ class AgentPolicy:
     def __init__(self, cfg: AgentConfig, kill: KillSwitch, clock: Callable[[], float] = time.time):
         self.cfg, self.kill = cfg, kill
         self.rate = RateLimiter(cfg.rate_limit_per_min, 60.0, clock)
+        self.social = {p: RateLimiter(cfg.social_limit_per_hour, 3600.0, clock) for p in SOCIAL_PLATFORMS}
 
     def check(self, tool: str, raw_args: object, approved_hash: str | None = None) -> Check:
         spec = TOOLS.get(tool)
@@ -92,4 +93,6 @@ class AgentPolicy:
         if tool == "edit_file" and risky_edit(data["path"], data["new_text"]) \
                 and approved_hash != args_hash(tool, data):
             return Check(False, "risky code needs the owner's approval")
+        if tool == "social_act" and not self.social[data["platform"]].hit():  # counted only once approved
+            return Check(False, f"social limit: {self.cfg.social_limit_per_hour} actions an hour on {data['platform']}")
         return Check(True, "ok", args)

@@ -20,6 +20,7 @@ class FakeChrome:
         self.video = {"exists": True, "paused": video_paused, "time": 3.0}
         self.next_id = 100
         self.captcha = False
+        self.logged_in = True
         self.connected = True
 
     def call(self, op, timeout=None, **a):
@@ -48,6 +49,10 @@ class FakeChrome:
         if op == "video.play":
             self.video["paused"] = False
             return dict(self.video)
+        if op == "social.state":
+            return {"loggedIn": self.logged_in}
+        if op == "social.act":
+            return {"ok": True}
         if op in ("tabs.activate", "tabs.close"):
             if op == "tabs.close":
                 self.tabs = [t for t in self.tabs if t["id"] != a["tabId"]]
@@ -185,3 +190,33 @@ async def test_bridge_round_trip_and_auth():
 def test_bridge_refuses_to_listen_beyond_localhost():
     with pytest.raises(ValueError, match="localhost"):
         asyncio.run(ExtensionBridge("t").serve("0.0.0.0", 0))  # noqa: S104 — the point of the test
+
+
+# ------------------------------------------------------------------ social (step 4)
+def test_social_open_builds_fixed_urls_and_reuses_the_site_tab():
+    chrome = FakeChrome(tabs=[{"id": 3, "url": "https://x.com/home", "title": "X", "active": False, "audible": False,
+                               "focused": True}])
+    b = browser(chrome)
+    b.social_open("x", "search", "ai news")
+    b.social_open("instagram", "profile", "@some.user")
+    opens = [a for op, a in chrome.calls if op == "tabs.open"]
+    assert opens[0] == {"url": "https://x.com/search?q=ai+news", "tabId": 3}
+    assert opens[1]["url"] == "https://www.instagram.com/some.user/" and opens[1]["tabId"] is None
+
+
+def test_social_stops_on_a_login_page():
+    chrome = FakeChrome()
+    chrome.logged_in = False
+    with pytest.raises(BrowserError, match="not logged in"):
+        browser(chrome).social_open("facebook", "feed")
+
+
+def test_social_act_goes_to_the_right_page_first():
+    chrome = FakeChrome()
+    b = browser(chrome)
+    b.social_act("x", "message", "hi", to="@friend_1")
+    assert [a["url"] for op, a in chrome.calls if op == "tabs.open"] == ["https://x.com/friend_1"]
+    act = [a for op, a in chrome.calls if op == "social.act"][0]
+    assert act["action"] == "message" and act["text"] == "hi" and act["dry"] is False
+    with pytest.raises(BrowserError, match="open the Tiktok post"):
+        browser(FakeChrome()).social_act("tiktok", "like")

@@ -35,6 +35,7 @@ class AgentConfig:
     allowed_hosts: list[str] = field(default_factory=list)
     allowed_clients: list[str] = field(default_factory=list)  # PC1 / VPN IPs; empty = any (dev only)
     rate_limit_per_min: int = 30
+    social_limit_per_hour: int = 20  # likes/comments/follows/posts/messages per platform (account safety)
     verify_timeout_s: float = 8.0
     tool_timeout_s: float = 15.0
     killswitch_hotkey: str = "ctrl+alt+shift+k"  # local kill switch (US-607); "" disables

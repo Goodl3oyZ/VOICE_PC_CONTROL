@@ -23,7 +23,9 @@ The agent's `agent_config.local.json` uses `"browser_mode": "extension"` (defaul
 | It can | It cannot |
 | --- | --- |
 | List the tabs of the current window, open an **https** page in a tab, switch to or close a tab | Open `file://`, `chrome://` or any non-https page |
-| Read search results on Google and YouTube, read/press play on the YouTube video | Read or run scripts on any other site (host permissions: google.com and youtube.com only) |
+| Read search results on Google and YouTube, read/press play on the YouTube video | Read or run scripts on any other site (host permissions: Google, YouTube, Facebook, Instagram, X, TikTok only) |
+| On Facebook, Instagram, X and TikTok: like, comment, follow, post, message — **only after you approve the exact action and text on the phone**, at most 20 an hour per site, checked on the page afterwards | Act on its own, type passwords, act on a login page, or be triggered by text on a page (these actions come only from the phone wizard) |
+| Reload itself after an update (`ext.reload`) | Change its own permissions without Chrome asking you |
 | Talk to the agent on `ws://127.0.0.1:8766` | Talk to any other server; there is no "run this code" operation |
 
 - The agent's bridge listens on 127.0.0.1 only, accepts only `chrome-extension://` origins, and requires the

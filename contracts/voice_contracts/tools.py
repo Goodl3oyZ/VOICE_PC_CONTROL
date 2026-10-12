@@ -15,7 +15,7 @@ from dataclasses import dataclass
 from typing import Any, Literal
 from urllib.parse import quote_plus, urlsplit
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 NAME_PATTERN = r"^[a-z0-9_\-]{1,32}$"
 
@@ -107,6 +107,57 @@ class YoutubePlayArgs(_QueryArgs):
 class BrowserTabsArgs(_Args):
     action: Literal["list", "next", "previous", "close"] = Field(
         description="list open tabs, switch to next/previous tab, or close the current tab")
+
+
+# ---- App flows step 4: social sites in the owner's own Chrome (extension) ----
+SOCIAL_PLATFORMS = ("facebook", "instagram", "x", "tiktok")
+SocialPlatform = Literal["facebook", "instagram", "x", "tiktok"]
+SOCIAL_PAGES = {  # which pages each platform has (URLs are built on PC2 from fixed templates)
+    "facebook": ("feed", "search", "profile", "messages", "notifications"),
+    "instagram": ("feed", "search", "profile", "messages", "reels"),
+    "x": ("feed", "search", "profile", "messages", "notifications"),
+    "tiktok": ("foryou", "following", "search", "profile"),
+}
+_HANDLE = re.compile(r"^[A-Za-z0-9._]{1,40}$")
+
+
+class SocialOpenArgs(_Args):
+    platform: SocialPlatform
+    page: Literal["feed", "foryou", "following", "search", "profile", "messages", "notifications", "reels"] = "feed"
+    query: str = Field("", max_length=100, description="Search words, or the account name for page=profile")
+
+    @model_validator(mode="after")
+    def _check(self) -> SocialOpenArgs:
+        if self.page not in SOCIAL_PAGES[self.platform]:
+            raise ValueError(f"{self.platform} has no {self.page} page")
+        if self.page == "search" and not self.query:
+            raise ValueError("search needs words")
+        if self.page == "profile" and self.query and not _HANDLE.match(self.query.lstrip("@")):
+            raise ValueError("account names are letters, digits, . and _")
+        return self
+
+
+class SocialActArgs(_Args):
+    platform: SocialPlatform
+    action: Literal["like", "comment", "follow", "post", "message"]
+    text: str = Field("", max_length=500, description="Exact text for comment/post/message (shown for approval)")
+    to: str = Field("", max_length=40, description="Account to message (message only)")
+
+    @model_validator(mode="after")
+    def _check(self) -> SocialActArgs:
+        if self.action in ("comment", "post", "message") and not self.text.strip():
+            raise ValueError(f"{self.action} needs text")
+        if self.action in ("like", "follow") and self.text:
+            raise ValueError(f"{self.action} takes no text")
+        if self.action == "message" and not _HANDLE.match(self.to.lstrip("@")):
+            raise ValueError("message needs an account name")
+        if self.action != "message" and self.to:
+            raise ValueError("'to' is only for messages")
+        if self.platform == "tiktok" and self.action in ("post", "message"):
+            raise ValueError("TikTok supports like, comment and follow here")
+        if self.platform == "instagram" and self.action == "post":
+            raise ValueError("Instagram posts need a photo: post from the phone app")
+        return self
 
 
 # ---- Phase 3: AI coding agent (projects registered on PC2; edits only on an ai/* git branch) ----
@@ -221,6 +272,13 @@ TOOLS: dict[str, ToolSpec] = {
         ToolSpec("git_diff", 0, ProjectArgs, "Show what the AI changed compared with the base branch", 3),
         ToolSpec("revert_changes", 2, ProjectArgs,
                  "Undo all AI changes: back to the base branch, delete the ai/* branch", 3),
+        # App flows step 4: browsing is free; anything others can see needs approval and comes only from the
+        # phone wizard (page text can never trigger it).
+        ToolSpec("social_open", 1, SocialOpenArgs,
+                 "Open Facebook, Instagram, X or TikTok (feed, search, a profile, messages) in Chrome on PC2", 4),
+        ToolSpec("social_act", 3, SocialActArgs,
+                 "Like, comment, follow, post or message on a social site (exact text approved on the phone)", 4,
+                 llm=False),
         # App flows (redesign step 3): project discovery and confirm-once registration, wizard only.
         ToolSpec("find_projects", 0, NoArgs, "List git repos found in the owner's folders", 3, llm=False),
         ToolSpec("register_project", 3, RegisterProjectArgs,

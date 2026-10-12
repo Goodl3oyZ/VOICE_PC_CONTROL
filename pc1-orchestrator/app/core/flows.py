@@ -12,8 +12,10 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any
 
+from pydantic import ValidationError
+
 from voice_contracts.models import ToolCall
-from voice_contracts.tools import NAME_PATTERN
+from voice_contracts.tools import NAME_PATTERN, TOOLS
 
 from .knowledge import Knowledge
 
@@ -98,6 +100,54 @@ def _code(a: dict[str, str]) -> str | ToolCall:
 
 
 _SOON = "Arrives with the Chrome extension (build step 2)"
+
+# ---- social (step 4): browsing is free; actions others can see go to the approval card with the exact text
+_PAGE_LABELS = {"feed": ("Feed", ""), "foryou": ("For You", ""), "following": ("Following", ""),
+                "search": ("Search", ""), "profile": ("Open a profile", ""), "messages": ("Messages", ""),
+                "notifications": ("Notifications", ""), "reels": ("Reels", "")}
+_ACT_LABELS = {"like": ("Like the open post", "You approve it on the phone"),
+               "comment": ("Comment on the open post", "You approve the exact text"),
+               "follow": ("Follow the open profile", "You approve it on the phone"),
+               "post": ("Write a new post", "You approve the exact text"),
+               "message": ("Send a message", "You approve the exact text")}
+SOCIAL_FLOWS = [  # id, title, subtitle, group, pages, actions
+    ("tiktok", "TikTok", "For You, search, like", "Watch & listen", ("foryou", "following", "search", "profile"),
+     ("like", "comment", "follow")),
+    ("facebook", "Facebook", "Feed, Messenger, post", "Social",
+     ("feed", "search", "profile", "messages", "notifications"), ("like", "comment", "follow", "post", "message")),
+    ("instagram", "Instagram", "Feed, Reels, DMs", "Social", ("feed", "reels", "search", "profile", "messages"),
+     ("like", "comment", "follow", "message")),
+    ("x", "X", "Timeline, search, post", "Social", ("feed", "search", "profile", "messages", "notifications"),
+     ("like", "comment", "follow", "post", "message")),
+]
+
+
+def _social_build(platform: str) -> Callable[[dict[str, str]], ToolCall]:
+    def build(a: dict[str, str]) -> ToolCall:
+        what, name = a["what"], platform.title() if platform != "x" else "X"
+        if what in _PAGE_LABELS:
+            args = {"platform": platform, "page": what, "query": a.get("query") or a.get("account", "")}
+            return ToolCall(tool="social_open", arguments=args, rationale=f"{name}: {_PAGE_LABELS[what][0].lower()}"
+                            + (f" “{args['query']}”" if args["query"] else ""))
+        args = {"platform": platform, "action": what, "text": a.get("text", ""), "to": a.get("to", "")}
+        said = f": “{args['text']}”" if args["text"] else ""
+        who = f" to @{args['to'].lstrip('@')}" if args["to"] else ""
+        return ToolCall(tool="social_act", arguments=args, rationale=f"{name}: {what}{who}{said}")
+    return build
+
+
+def _social_flow(fid: str, title: str, subtitle: str, group: str, pages: tuple[str, ...],
+                 actions: tuple[str, ...]) -> Flow:
+    opts = tuple(Option(p, *_PAGE_LABELS[p]) for p in pages) + tuple(Option(a, *_ACT_LABELS[a]) for a in actions)
+    return Flow(fid, title, subtitle, fid, group, stages=(
+        Stage("what", "choice", "What do you want to do?", opts),
+        Stage("query", "text", "Search for what?", when=("what", ("search",)), placeholder="cats, news…"),
+        Stage("account", "text", "Which account?", when=("what", ("profile",)), placeholder="account name"),
+        Stage("to", "text", "Send it to which account?", when=("what", ("message",)), placeholder="account name"),
+        Stage("text", "text", "What should it say? You will approve the exact text.",
+              when=("what", ("comment", "post", "message")), placeholder="Congrats!"),
+    ), build=_social_build(fid), controls=(Control("What tabs are open?", "What tabs are open?"),
+                                            Control("Close this tab", "Close this tab")), triggers=(fid,))
 FLOWS: dict[str, Flow] = {f.id: f for f in [
     Flow("youtube", "YouTube", "Play, search, control", "youtube", "Watch & listen",
          stages=(
@@ -149,13 +199,7 @@ FLOWS: dict[str, Flow] = {f.id: f for f in [
     Flow("pc", "PC", "Status, screen, wake", "monitor", "PC",
          controls=(Control("What's running?", "Show status"), Control("Look at the screen", "What's on the screen?"),
                    Control("Wake up the PC", "Wake up the PC"), Control("Stop everything", "Stop"))),
-    Flow("tiktok", "TikTok", "For You, search, watch", "tiktok", "Watch & listen", available=False, coming=_SOON),
-    Flow("facebook", "Facebook", "Feed, Messenger", "facebook", "Social", available=False,
-         coming="Arrives with the social flows (build step 4)"),
-    Flow("instagram", "Instagram", "Feed, Reels, DMs", "instagram", "Social", available=False,
-         coming="Arrives with the social flows (build step 4)"),
-    Flow("x", "X", "Timeline, search, post", "x", "Social", available=False,
-         coming="Arrives with the social flows (build step 4)"),
+    *[_social_flow(*f) for f in SOCIAL_FLOWS],
     Flow("office", "Office", "Word, Excel, PowerPoint", "office", "Work", available=False,
          coming="Arrives with the Office connector (build step 5)"),
     Flow("steam", "Steam", "Launch your games", "steam", "Play", available=False,
@@ -230,6 +274,11 @@ def resolve(flow_id: str, answers: dict[str, str], kb: Knowledge,
                     raise FlowError("pick a different project name (letters, digits and -)")
         clean[s.id] = v
     command = f.build(clean) if f.build else None
+    if isinstance(command, ToolCall):  # check the exact call now, so the phone gets a clear message
+        try:
+            TOOLS[command.tool].args.model_validate(command.arguments)
+        except ValidationError as e:
+            raise FlowError(str(e.errors()[0].get("msg", "invalid answer")).removeprefix("Value error, ")) from e
     return command, remember
 
 

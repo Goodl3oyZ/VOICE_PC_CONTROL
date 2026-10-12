@@ -159,6 +159,14 @@ def summarize(tool: str, args: dict[str, Any], result: ToolResult, kb: Knowledge
             return t["no_matches"].format(query=args["query"])
         return t["matches"].format(n=len(m), query=args["query"],
                                    items=" · ".join(f"{x['file']}:{x['line']}" for x in m[:5]))
+    if tool == "social_open":
+        site = "X" if d.get("platform") == "x" else str(d.get("platform", "")).title()
+        return f"Opened {site} ({d.get('page')}) in Chrome on the PC"
+    if tool == "social_act":
+        site = "X" if args.get("platform") == "x" else str(args.get("platform", "")).title()
+        if d.get("already"):
+            return f"Already done on {site} ({args.get('action')}d before)"
+        return f"Done on {site}: {args.get('action')}" + (f" “{args['text']}”" if args.get("text") else "")
     if tool == "register_project":  # English-only wizard flows (redesign step 3)
         return f"The AI can now work on “{d.get('project')}”. Open Apps → Code and pick it."
     if tool == "create_project":

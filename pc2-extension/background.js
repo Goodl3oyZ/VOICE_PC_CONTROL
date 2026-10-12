@@ -139,6 +139,16 @@ async function handle(op, a) {
       return runInPage(a.tabId, videoState, []);
     case "video.play":
       return runInPage(a.tabId, videoPlay, []);
+    case "ext.reload": // pick up a new version of these files after an update (reloads only itself)
+      setTimeout(() => chrome.runtime.reload(), 200);
+      return { reloading: VERSION };
+    case "social.state":
+      return runInPage(a.tabId, socialState, []);
+    case "social.act": {
+      const acts = ["like", "comment", "follow", "post", "message"];
+      if (!acts.includes(a.action) || !["facebook", "instagram", "x", "tiktok"].includes(a.platform)) throw new Error("bad action");
+      return runInPage(a.tabId, socialAct, [a.platform, a.action, String(a.text || "").slice(0, 500), !!a.dry]);
+    }
     default:
       throw new Error(`unknown operation ${op}`);
   }
@@ -208,6 +218,117 @@ async function videoPlay() {
     return { exists: true, paused: true, blocked: e.name };
   }
   return { exists: true, paused: v.paused };
+}
+
+// ------------------------------------------------------------------ social (only after approval on the phone)
+function socialState() {
+  const login = /\/(login|accounts\/login|i\/flow\/login|signup)/.test(location.pathname) ||
+    !!document.querySelector("input[type=password]");
+  return { url: location.href, loggedIn: !login };
+}
+
+// One fixed recipe per platform and action, found by stable labels. dry=true only reports whether the controls
+// are there (nothing is typed or clicked). Every real action is checked on the page afterwards.
+async function socialAct(platform, action, text, dry) {
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+  const q = (sel) => document.querySelector(sel);
+  const visible = (el) => !!el && el.getClientRects().length > 0;
+  const byText = (sel, re) => [...document.querySelectorAll(sel)].find((el) => visible(el) && re.test(el.textContent.trim()));
+  const wait = async (fn, ms = 8000) => {
+    for (let t = 0; t < ms; t += 250) {
+      const v = fn();
+      if (v) return v;
+      await sleep(250);
+    }
+    return null;
+  };
+  if (q("input[type=password]")) return { error: "Please log in on the PC first (the agent never types passwords)" };
+  const type = async (el, value) => {
+    el.focus();
+    if (el.tagName === "TEXTAREA" || el.tagName === "INPUT") {
+      const setter = Object.getOwnPropertyDescriptor(Object.getPrototypeOf(el), "value").set;
+      setter.call(el, value);
+      el.dispatchEvent(new Event("input", { bubbles: true }));
+    } else {
+      document.execCommand("insertText", false, value);
+    }
+    await sleep(400);
+  };
+  const enter = (el) => ["keydown", "keypress", "keyup"].forEach((k) =>
+    el.dispatchEvent(new KeyboardEvent(k, { key: "Enter", code: "Enter", keyCode: 13, which: 13, bubbles: true })));
+  const appears = (value) => wait(() => document.body.innerText.includes(value.slice(0, 60)), 8000);
+  const MIND = /^What.s on your mind/;
+
+  const R = {
+    x: {
+      like: { find: () => q("article [data-testid='like']") || q("article [data-testid='unlike']"),
+              done: () => q("article [data-testid='unlike']") },
+      follow: { find: () => q("[data-testid$='-follow']") || q("[data-testid$='-unfollow']"),
+                done: () => q("[data-testid$='-unfollow']") },
+      comment: { box: () => q("[data-testid='tweetTextarea_0']"), send: () => q("[data-testid='tweetButtonInline']") },
+      post: { box: () => q("[data-testid='tweetTextarea_0']"), send: () => q("[data-testid='tweetButton']") },
+      message: { open: () => q("[data-testid='sendDMFromProfile']"), box: () => q("[data-testid='dmComposerTextInput']"),
+                 send: () => q("[data-testid='dmComposerSendButton']") },
+    },
+    facebook: {
+      like: { find: () => q("[role='main'] [aria-label='Like'][role='button']") || q("[role='main'] [aria-label='Remove Like'][role='button']"),
+              done: () => q("[role='main'] [aria-label='Remove Like'][role='button']") },
+      follow: { find: () => q("[role='main'] [aria-label='Follow'][role='button']") || q("[role='main'] [aria-label='Following'][role='button']"),
+                done: () => q("[role='main'] [aria-label='Following'][role='button']") },
+      comment: { box: () => q("[contenteditable='true'][aria-label^='Write a comment']") || q("[contenteditable='true'][aria-label^='Comment as']"),
+                 enter: true },
+      post: { open: () => byText("[role='button']", MIND), box: () => q("[role='dialog'] [contenteditable='true'][role='textbox']"),
+              send: () => q("[role='dialog'] [aria-label='Post'][role='button']") },
+      message: { box: () => q("[contenteditable='true'][aria-label^='Message']") || q("[contenteditable='true'][role='textbox']"), enter: true },
+    },
+    instagram: {
+      like: { find: () => q("main svg[aria-label='Like']") || q("main svg[aria-label='Unlike']"), done: () => q("main svg[aria-label='Unlike']") },
+      follow: { find: () => byText("header button, header [role='button']", /^Follow$/) || byText("header button, header [role='button']", /^Following$/),
+                done: () => byText("header button, header [role='button']", /^Following$/) },
+      comment: { box: () => q("textarea[aria-label^='Add a comment']"), send: () => byText("[role='button'], button", /^Post$/) },
+      message: { open: () => byText("header [role='button'], header button", /^Message$/),
+                 box: () => q("[contenteditable='true'][aria-label^='Message']"), enter: true },
+    },
+    tiktok: {
+      like: { find: () => q("[data-e2e='like-icon'], [data-e2e='browse-like-icon']"),
+              done: () => q("[aria-pressed='true'] [data-e2e='like-icon'], [aria-pressed='true'][data-e2e='browse-like-icon']") },
+      follow: { find: () => q("[data-e2e='follow-button'], [data-e2e='browse-follow']"),
+                done: () => byText("[data-e2e='follow-button'], [data-e2e='browse-follow']", /^Following$/) },
+      comment: { box: () => q("[data-e2e='comment-input'] [contenteditable='true']"), send: () => q("[data-e2e='comment-post']") },
+    },
+  };
+  const r = (R[platform] || {})[action];
+  if (!r) return { error: `${action} is not supported on ${platform}` };
+
+  if (action === "like" || action === "follow") {
+    const btn = await wait(r.find, dry ? 4000 : 8000);
+    if (dry) return { dry: true, found: !!btn, already: !!r.done() };
+    if (!btn) return { error: `Could not find the ${action} button on this page: open the post or profile first` };
+    if (r.done()) return { ok: true, already: true };
+    (btn.closest("button,[role='button']") || btn).click();
+    return (await wait(r.done, 6000)) ? { ok: true } : { error: `The ${action} did not register` };
+  }
+  if (r.open && !r.box()) {
+    const o = await wait(r.open, dry ? 4000 : 8000);
+    if (dry) return { dry: true, found: !!o, step: "open" };
+    if (!o) return { error: `Could not find where to start the ${action}` };
+    o.click();
+  }
+  const box = await wait(r.box, dry ? 4000 : 8000);
+  if (dry) return { dry: true, found: !!box, send: r.enter ? "enter" : !!(r.send && r.send()) };
+  if (!box) return { error: `Could not find the ${action} box on this page` };
+  await type(box, text);
+  if (r.enter) {
+    enter(box);
+  } else {
+    const send = await wait(() => {
+      const b = r.send();
+      return b && !b.disabled && b.getAttribute("aria-disabled") !== "true" ? b : null;
+    });
+    if (!send) return { error: "The send button stayed disabled" };
+    send.click();
+  }
+  return (await appears(text)) ? { ok: true } : { error: `Sent, but the ${action} does not show on the page yet: check the PC` };
 }
 
 // ------------------------------------------------------------------ lifecycle

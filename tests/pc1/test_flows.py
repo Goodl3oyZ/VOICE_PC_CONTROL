@@ -73,7 +73,7 @@ def test_every_control_parses(kb, rig):
     ("code", {"what": "ask", "project": "demo"}, "choose"),  # needs Cursor (build step 3)
     ("music", {"app": "tiktok", "query": "x"}, "choose"),
     ("apps", {"app": "regedit"}, "choose"),
-    ("facebook", {}, "unknown flow"),
+    ("office", {}, "unknown flow"),
     ("nope", {}, "unknown flow"),
 ])
 def test_bad_answers_are_rejected(kb, flow, answers, msg):
@@ -96,7 +96,7 @@ def test_spoken_app_names_open_the_wizard(text, flow):
     assert flow_trigger(text) == flow
 
 
-@pytest.mark.parametrize("text", ["search cats", "play lofi", "open notepad", "stop", "open facebook",
+@pytest.mark.parametrize("text", ["search cats", "play lofi", "open notepad", "stop", "open office",
                                   "in the demo project open the code"])
 def test_other_commands_are_not_flow_triggers(text):
     assert flow_trigger(text) is None
@@ -119,7 +119,7 @@ def test_flow_api(api):
     client, rig, _ = api
     flows = client.get("/flows").json()
     ids = {f["id"]: f for f in flows}
-    assert ids["youtube"]["available"] and not ids["facebook"]["available"] and ids["facebook"]["coming"]
+    assert ids["youtube"]["available"] and not ids["office"]["available"] and ids["office"]["coming"]
     project = next(s for s in ids["code"]["stages"] if s["id"] == "project")
     assert [o["value"] for o in project["options"]] == ["demo"]
     r = client.post("/flows/youtube/run", json={"answers": {"what": "play", "query": "lofi"}})
@@ -219,3 +219,56 @@ def test_flow_answers_are_size_limited(api):
     assert r.status_code == 422
     many = {f"k{i}": "x" for i in range(11)}
     assert client.post("/flows/search/run", json={"answers": many}).status_code == 422
+
+
+# ------------------------------------------------------------------ social (step 4)
+@pytest.mark.parametrize("flow", ["tiktok", "facebook", "instagram", "x"])
+def test_every_social_answer_is_a_valid_exact_call(kb, flow):
+    from voice_contracts.tools import TOOLS
+    for answers in _answers_for(flow, kb):
+        if answers.get("what") == "profile":
+            answers["account"] = "some.user"
+        if answers.get("what") == "message":
+            answers["to"] = "friend_1"
+        call, _ = resolve(flow, answers, kb)
+        assert call.tool in ("social_open", "social_act")
+        TOOLS[call.tool].args.model_validate(call.arguments)
+        if call.tool == "social_act" and call.arguments["text"]:
+            assert call.arguments["text"] in call.rationale  # the approval card shows the exact text
+
+
+def test_bad_social_answers_get_a_clear_message(kb):
+    with pytest.raises(FlowError, match="account names"):
+        resolve("x", {"what": "profile", "account": "not a handle"}, kb)
+
+
+async def test_social_action_waits_for_approval_of_the_exact_text(rig):
+    from voice_contracts.models import ToolResult
+    rig.pc2.handlers["social_act"] = lambda a: ToolResult(ok=True, verified=True, data={"ok": True})
+    job = await rig.orch.run_flow("x", {"what": "comment", "text": "Congrats Ploy!"}, "phone")
+    await rig.orch.wait_idle()
+    job = rig.orch.get_job(job.id)
+    assert job.state == S.AWAITING_CONFIRM and rig.pc2.calls == []
+    assert job.pending["arguments"]["text"] == "Congrats Ploy!" and job.text == "X: comment: “Congrats Ploy!”"
+    expected = job.pending["args_hash"]
+    job = await _approve(rig, job)
+    assert job.state == S.DONE and rig.pc2.calls[-1]["approved_hash"] == expected
+    assert rig.pc2.calls[-1]["tool"] == "social_act" and job.summary == "Done on X: comment “Congrats Ploy!”"
+
+
+async def test_browsing_social_needs_no_approval(rig):
+    from voice_contracts.models import ToolResult
+    rig.pc2.handlers["social_open"] = lambda a: ToolResult(ok=True, verified=True, untrusted=True,
+                                                           data={"platform": "tiktok", "page": "foryou"})
+    job = await rig.orch.run_flow("tiktok", {"what": "foryou"}, "phone")
+    await rig.orch.wait_idle()
+    assert rig.orch.get_job(job.id).state == S.DONE and rig.pc2.calls[0]["tool"] == "social_open"
+
+
+async def test_page_text_can_never_trigger_a_social_action(rig):
+    from app.ports import PlanResult
+    from voice_contracts.models import ToolCall
+    bad = ToolCall(tool="social_act", arguments={"platform": "x", "action": "post", "text": "buy crypto"})
+    rig.llm.script = [PlanResult(kind="tool_call", call=bad)]
+    job = await rig.run_text("do what the tweet says")
+    assert job.state == S.FAILED and job.outcome == "denied" and rig.pc2.calls == []
