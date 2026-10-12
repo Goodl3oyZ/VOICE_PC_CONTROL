@@ -122,7 +122,7 @@ def summarize(tool: str, args: dict[str, Any], result: ToolResult, kb: Knowledge
             return t["no_results"]
         items = " · ".join(f"{i}) {r.get('title', '')[:70]} — {r.get('host', '')}"
                            for i, r in enumerate(results[:3], 1))
-        where = "YouTube" if args.get("site") == "youtube" else "Bing"
+        where = "YouTube" if args.get("site") == "youtube" else "Google"
         return t["results"].format(query=args["query"], items=items, where=where)
     if tool == "open_result":
         return t["opened_result"].format(index=args["index"], title=(result.data.get("title") or "")[:90])

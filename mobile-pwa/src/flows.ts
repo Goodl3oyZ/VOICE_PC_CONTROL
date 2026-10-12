@@ -70,7 +70,8 @@ export function matchChoice(text: string, options: FlowOption[]): string | null 
 export interface SearchResult {
   title: string;
   url: string;
-  snippet?: string;
+  channel?: string;
+  length?: string;
 }
 
 /** Results of the flow's last search, for the "pick one" list (page text is untrusted: shown, never acted on). */

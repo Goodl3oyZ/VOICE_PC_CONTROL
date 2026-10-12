@@ -1,0 +1,12 @@
+{
+  "manifest_version": 3,
+  "name": "Voice PC",
+  "version": "0.1.0",
+  "description": "Lets the Voice PC agent on this computer search, play YouTube and switch tabs in this Chrome. Talks only to the local agent.",
+  "minimum_chrome_version": "116",
+  "permissions": ["tabs", "scripting", "storage", "alarms"],
+  "host_permissions": ["https://www.google.com/*", "https://www.youtube.com/*"],
+  "background": { "service_worker": "background.js" },
+  "options_ui": { "page": "options.html", "open_in_tab": true },
+  "action": { "default_title": "Voice PC", "default_popup": "options.html" }
+}

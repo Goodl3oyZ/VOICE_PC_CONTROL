@@ -88,7 +88,7 @@ async def test_pc1_summary_and_taint(rig_factory):
         "results": [{"title": "AccuWeather Bangkok", "host": "accuweather.com", "url": "https://accuweather.com/x"},
                     {"title": "BBC Weather", "host": "bbc.com", "url": "https://bbc.com/w"}]})
     job = await rig.run_text("Search for weather in Bangkok")
-    assert job.summary.startswith("Results for “weather in Bangkok” (Bing): 1) AccuWeather Bangkok — accuweather.com")
+    assert job.summary.startswith("Results for “weather in Bangkok” (Google): 1) AccuWeather Bangkok — accuweather.com")
     assert job.tainted is True  # web content is untrusted data
 
 

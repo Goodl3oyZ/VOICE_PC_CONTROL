@@ -40,6 +40,10 @@ class AgentConfig:
     # Phase 2 agent browser: visible window, dedicated profile (default <data_dir>/chrome-profile)
     browser_headless: bool = False
     browser_profile_dir: str | None = None
+    # Redesign step 2: "extension" drives the user's own Chrome through the Voice PC extension (bridge on
+    # 127.0.0.1:extension_port); "playwright" keeps the old separate automated browser.
+    browser_mode: str = "extension"
+    extension_port: int = 8766
     # Outbound mode: dial PC1 (e.g. wss://pc.example.com/agent/ws) instead of listening for PC1.
     pc1_ws_url: str | None = None
     bind_host: str = "127.0.0.1"

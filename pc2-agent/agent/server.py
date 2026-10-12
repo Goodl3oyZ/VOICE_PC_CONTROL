@@ -41,7 +41,12 @@ def create_app(cfg: AgentConfig, secret: bytes, launcher: Launcher,
     audit = AuditLog(data_dir / "audit.jsonl")
     nonces = NonceCache()
     idem: dict[str, tuple[float, dict[str, Any]]] = {}
-    if browser is None:  # lazily started on the first browser tool call
+    bridge = None
+    if browser is None and cfg.browser_mode == "extension":  # the user's own Chrome via the extension
+        from .extension import ExtensionBridge, ExtensionBrowser, load_token
+        bridge = ExtensionBridge(load_token(data_dir))
+        browser = ExtensionBrowser(bridge)
+    elif browser is None:  # lazily started on the first browser tool call
         from .browser import PlaywrightBrowser
         profile = Path(cfg.browser_profile_dir) if cfg.browser_profile_dir else data_dir / "chrome-profile"
         browser = PlaywrightBrowser(profile, headless=cfg.browser_headless)
@@ -53,6 +58,7 @@ def create_app(cfg: AgentConfig, secret: bytes, launcher: Launcher,
     app.state.kill = kill
     app.state.audit = audit
     app.state.ctx = ctx
+    app.state.ext_bridge = bridge  # main.py serves it next to the PC1 connection
 
     async def authenticate(request: Request) -> bytes:
         client = request.client.host if request.client else ""

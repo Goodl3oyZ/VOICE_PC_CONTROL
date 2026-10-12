@@ -311,7 +311,7 @@ function FlowWizard({ api, flow, jobs, onClose, onJob, onUpdate, onError }: Wiza
                   <span className="flow-option-num">{i + 1}</span>
                   <span className="flow-option-text">
                     <span className="flow-option-label">{r.title}</span>
-                    <span className="flow-option-hint">{safeHost(r.url)}</span>
+                    <span className="flow-option-hint">{[r.channel || safeHost(r.url), r.length].filter(Boolean).join(" · ")}</span>
                   </span>
                 </button>
               ))}

@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Voice PC</title>
+<style>
+  :root { color-scheme: light dark; --bg: #f8fafc; --fg: #0f172a; --muted: #475569; --card: #fff; --line: #e2e8f0; --ok: #059669; --bad: #dc2626; --accent: #0284c7; }
+  @media (prefers-color-scheme: dark) { :root { --bg: #07090e; --fg: #f8fafc; --muted: #94a3b8; --card: #121828; --line: #263656; --ok: #10b981; --bad: #ef4444; --accent: #06b6d4; } }
+  body { margin: 0; background: var(--bg); color: var(--fg); font: 15px/1.5 system-ui, sans-serif; }
+  main { max-width: 440px; min-width: 300px; margin: 0 auto; padding: 16px; }
+  h1 { font-size: 1.2rem; margin: 0 0 4px; }
+  p { color: var(--muted); margin: 4px 0 12px; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 14px; margin-bottom: 12px; }
+  label { display: block; font-weight: 600; margin: 8px 0 4px; }
+  input[type=password], input[type=number] { width: 100%; box-sizing: border-box; padding: 9px 10px; border-radius: 8px; border: 1px solid var(--line); background: var(--bg); color: var(--fg); font: inherit; }
+  button { margin-top: 12px; padding: 9px 16px; border: 0; border-radius: 8px; background: var(--accent); color: #fff; font: inherit; font-weight: 600; cursor: pointer; }
+  .status { font-weight: 700; }
+  .ok { color: var(--ok); } .bad { color: var(--bad); }
+  code { font-size: 0.85em; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Voice PC</h1>
+  <p>Lets the Voice PC agent on this computer search Google, play YouTube and switch tabs in this Chrome. It talks only to the agent on this PC.</p>
+  <div class="card">Status: <span id="status" class="status">…</span></div>
+  <div class="card">
+    <label for="token">Pairing token</label>
+    <input id="token" type="password" autocomplete="off" placeholder="paste from the agent">
+    <p>Get it on this PC with <code>python -m agent.ext_token</code> in the pc2-agent folder.</p>
+    <label for="port">Agent port</label>
+    <input id="port" type="number" min="1024" max="65535" value="8766">
+    <label><input id="enabled" type="checkbox" checked> Allow Voice PC to control Chrome</label>
+    <button id="save" type="button">Save</button>
+  </div>
+</main>
+<script src="options.js"></script>
+</body>
+</html>

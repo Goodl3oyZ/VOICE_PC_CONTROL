@@ -10,7 +10,9 @@ import os
 import socket
 import sys
 import time
+from collections.abc import Coroutine
 from pathlib import Path
+from typing import Any
 
 import uvicorn
 
@@ -68,13 +70,27 @@ def main() -> None:
         cfg.allowed_clients = ["127.0.0.1"]  # relayed requests enter in-process from the connector only
         app = create_app(cfg, secret, WindowsLauncher())
         start_hotkey_thread(app, cfg.killswitch_hotkey)
-        asyncio.run(run_connector(app, cfg.pc1_ws_url, secret))
+        asyncio.run(_with_extension(app, cfg, run_connector(app, cfg.pc1_ws_url, secret)))
         return
+    import asyncio
+
     wait_for_address(cfg.bind_host, cfg.port)
     app = create_app(cfg, secret, WindowsLauncher())
     start_hotkey_thread(app, cfg.killswitch_hotkey)
-    uvicorn.run(app, host=cfg.bind_host, port=cfg.port, ssl_certfile=cfg.tls_certfile,
-                ssl_keyfile=cfg.tls_keyfile, log_level="info")
+    server = uvicorn.Server(uvicorn.Config(app, host=cfg.bind_host, port=cfg.port, ssl_certfile=cfg.tls_certfile,
+                                           ssl_keyfile=cfg.tls_keyfile, log_level="info"))
+    asyncio.run(_with_extension(app, cfg, server.serve()))
+
+
+async def _with_extension(app: object, cfg: AgentConfig, main: Coroutine[Any, Any, Any]) -> None:
+    """Run the agent next to the Chrome-extension bridge (127.0.0.1 only), when extension mode is on."""
+    import asyncio
+
+    bridge = getattr(getattr(app, "state", None), "ext_bridge", None)
+    if bridge is None:
+        await main
+        return
+    await asyncio.gather(main, bridge.serve("127.0.0.1", cfg.extension_port))
 
 
 if __name__ == "__main__":

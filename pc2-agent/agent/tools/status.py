@@ -9,7 +9,9 @@ from . import ToolContext, register
 
 def status_data(ctx: ToolContext) -> dict[str, object]:
     running = [name for name, e in ctx.cfg.apps.items() if ctx.launcher.is_running(e.process)]
-    return {"running": running, "kill_switch": ctx.kill.on, "version": "0.1.0"}
+    bridge = getattr(ctx.browser, "bridge", None)  # extension mode: is the user's Chrome connected?
+    chrome = None if bridge is None else bool(bridge.connected)
+    return {"running": running, "kill_switch": ctx.kill.on, "version": "0.1.0", "chrome_connected": chrome}
 
 
 @register("get_status")
