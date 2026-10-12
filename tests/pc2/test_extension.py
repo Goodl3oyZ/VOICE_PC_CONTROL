@@ -178,11 +178,15 @@ async def test_bridge_round_trip_and_auth():
                 await ws.send(json.dumps({"id": msg["id"], "ok": True, "data": [{"id": 1}]}))
                 msg = json.loads(await ws.recv())
                 await ws.send(json.dumps({"id": msg["id"], "ok": False, "error": "human check", "captcha": True}))
+                msg = json.loads(await ws.recv())
+                await ws.send(json.dumps({"id": msg["id"], "ok": False, "error": "unknown operation video.skip_ad"}))
 
             task = asyncio.create_task(extension())
             assert await bridge.acall("tabs.list") == [{"id": 1}]
             with pytest.raises(CaptchaDetected):
                 await bridge.acall("page.results", tabId=1, kind="google", max=5)
+            with pytest.raises(BrowserError, match="out of date .v0.1.0.*Reload"):
+                await bridge.acall("video.skip_ad", tabId=1)
             await task
             assert bridge.connected and bridge.version == "0.1.0"
     finally:

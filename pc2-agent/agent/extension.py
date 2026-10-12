@@ -149,6 +149,9 @@ class ExtensionBridge:
             err = str(msg.get("error", "failed"))[:300]
             if msg.get("captcha"):
                 raise CaptchaDetected(err)
+            if err.startswith("unknown operation"):  # Chrome still runs an older copy of the extension files
+                raise BrowserError(f"The Voice PC extension in Chrome is out of date (v{self.version or '?'}): "
+                                   "open chrome://extensions on the PC and click Reload on Voice PC")
             raise BrowserError(err)
         return msg.get("data")
 
