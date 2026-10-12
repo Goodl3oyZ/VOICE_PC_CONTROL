@@ -12,6 +12,7 @@ from dataclasses import dataclass, field
 
 from pydantic import ValidationError
 
+from voice_contracts.code_safety import risky_edit
 from voice_contracts.models import Decision, ToolCall
 from voice_contracts.tools import TOOLS, args_hash, host_allowed
 
@@ -77,6 +78,10 @@ def decide(call: ToolCall, ctx: PolicyContext) -> Decision:
         return _deny("forbidden by default", spec.risk)
     if ctx.tainted and spec.risk >= 2:
         return Decision(decision="confirm", risk=spec.risk, reason="tainted context",
+                        args_hash=h, arguments=args)
+    if call.tool == "edit_file" and (why := risky_edit(args["path"], args["new_text"])):
+        # Red-team I03/I07: never let an edit that adds process/network/secret access reach run_tests unseen
+        return Decision(decision="confirm", risk=3, reason="risky code: " + ", ".join(why),
                         args_hash=h, arguments=args)
     if spec.risk >= 3:
         return Decision(decision="confirm", risk=spec.risk, reason="high risk",

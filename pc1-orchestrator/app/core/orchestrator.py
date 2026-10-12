@@ -520,7 +520,10 @@ class Orchestrator:
     async def _run_confirmed(self, job: Job) -> None:
         p = job.pending or {}
         ok = await self._execute(job, p["tool"], p["arguments"], p["args_hash"], approved=True)
-        if ok:
+        job.pending = None
+        if ok and _is_coding(job) and job.planner != "shortcut":
+            await self._plan_loop(job)  # an approved risky edit is one step of the coding task: carry on
+        elif ok:
             await self._done(job)
 
     async def _execute(self, job: Job, tool: str, args: dict[str, Any], args_hash: str,

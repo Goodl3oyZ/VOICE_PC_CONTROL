@@ -9,6 +9,7 @@ from pathlib import Path
 
 from pydantic import BaseModel, ValidationError
 
+from voice_contracts.code_safety import risky_edit
 from voice_contracts.tools import TOOLS, args_hash, host_allowed
 
 from ..config import AgentConfig
@@ -87,4 +88,8 @@ class AgentPolicy:
             return Check(False, "forbidden by default")
         if spec.risk >= 3 and approved_hash != args_hash(tool, data):
             return Check(False, "missing or mismatched approval")
+        # Red-team I03/I07: process/network/secret access in an AI edit needs the owner's approval
+        if tool == "edit_file" and risky_edit(data["path"], data["new_text"]) \
+                and approved_hash != args_hash(tool, data):
+            return Check(False, "risky code needs the owner's approval")
         return Check(True, "ok", args)

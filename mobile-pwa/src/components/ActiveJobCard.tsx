@@ -131,6 +131,11 @@ export function ActiveJobCard({ job, api, onError, onUpdate, onNewJob }: ActiveJ
             <ShieldAlertIcon size={20} />
             <div>
               <div className="confirm-risk-title">{riskLabel(job.pending.risk)}</div>
+              {job.pending.reason.startsWith("risky code: ") && (
+                <div className="confirm-reason">
+                  The AI's edit {job.pending.reason.slice(12)}. Approve only if you asked for that.
+                </div>
+              )}
               <div className="confirm-timer">
                 {remainingSecs > 0 ? (
                   <>Please confirm within <strong>{remainingSecs}</strong> seconds</>
