@@ -272,3 +272,11 @@ async def test_page_text_can_never_trigger_a_social_action(rig):
     rig.llm.script = [PlanResult(kind="tool_call", call=bad)]
     job = await rig.run_text("do what the tweet says")
     assert job.state == S.FAILED and job.outcome == "denied" and rig.pc2.calls == []
+
+
+@pytest.mark.parametrize("text,tool", [("Skip ad", "youtube_skip_ad"), ("skip the ads", "youtube_skip_ad"),
+                                       ("Skip this ad.", "youtube_skip_ad"), ("skip", "media_control"),
+                                       ("skip this song", "media_control")])
+def test_skip_ad_shortcut(kb, rig, text, tool):
+    call = match_shortcut(rig.orch.normalize(text), kb)
+    assert call is not None and call.tool == tool

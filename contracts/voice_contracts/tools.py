@@ -254,6 +254,8 @@ TOOLS: dict[str, ToolSpec] = {
                  "Open result number N from the last web_search in the agent browser", 2),
         ToolSpec("youtube_play", 1, YoutubePlayArgs,
                  "Find a video or song on YouTube and start playing the first result in the agent browser", 2),
+        ToolSpec("youtube_skip_ad", 1, NoArgs,
+                 "Press YouTube's own Skip button on the ad that is playing (only when YouTube offers it)", 4),
         ToolSpec("browser_tabs", 1, BrowserTabsArgs,
                  "List, switch (next/previous) or close tabs in the agent browser", 2),
         # Phase 3 — coding. Reads are risk 0; edits/tests change files -> risk 2 (git branch + checkpoint).

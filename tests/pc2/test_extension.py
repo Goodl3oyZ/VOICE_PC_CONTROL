@@ -49,6 +49,8 @@ class FakeChrome:
         if op == "video.play":
             self.video["paused"] = False
             return dict(self.video)
+        if op == "video.skip_ad":
+            return {"ad": True, "skipped": True}
         if op == "social.state":
             return {"loggedIn": self.logged_in}
         if op == "social.act":
@@ -220,3 +222,12 @@ def test_social_act_goes_to_the_right_page_first():
     assert act["action"] == "message" and act["text"] == "hi" and act["dry"] is False
     with pytest.raises(BrowserError, match="open the Tiktok post"):
         browser(FakeChrome()).social_act("tiktok", "like")
+
+
+def test_skip_ad_uses_the_player_tab():
+    chrome = FakeChrome(tabs=[{"id": 7, "url": "https://www.youtube.com/watch?v=a", "title": "v", "active": True,
+                               "audible": True, "focused": True}])
+    assert browser(chrome).youtube_skip_ad() == {"ad": True, "skipped": True}
+    assert ("video.skip_ad", {"tabId": 7}) in chrome.calls
+    with pytest.raises(BrowserError, match="no YouTube video"):
+        browser(FakeChrome()).youtube_skip_ad()

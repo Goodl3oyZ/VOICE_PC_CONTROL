@@ -159,6 +159,12 @@ def summarize(tool: str, args: dict[str, Any], result: ToolResult, kb: Knowledge
             return t["no_matches"].format(query=args["query"])
         return t["matches"].format(n=len(m), query=args["query"],
                                    items=" · ".join(f"{x['file']}:{x['line']}" for x in m[:5]))
+    if tool == "youtube_skip_ad":
+        if d.get("skipped"):
+            return "Skipped the ad"
+        if d.get("ad"):
+            return "This ad can't be skipped yet" + (f" (Skip in {d['wait']})" if d.get("wait") else "")
+        return "No ad is playing"
     if tool == "social_open":
         site = "X" if d.get("platform") == "x" else str(d.get("platform", "")).title()
         return f"Opened {site} ({d.get('page')}) in Chrome on the PC"

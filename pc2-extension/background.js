@@ -142,6 +142,8 @@ async function handle(op, a) {
     case "ext.reload": // pick up a new version of these files after an update (reloads only itself)
       setTimeout(() => chrome.runtime.reload(), 200);
       return { reloading: VERSION };
+    case "video.skip_ad":
+      return runInPage(a.tabId, skipAd, []);
     case "social.state":
       return runInPage(a.tabId, socialState, []);
     case "social.act": {
@@ -218,6 +220,21 @@ async function videoPlay() {
     return { exists: true, paused: true, blocked: e.name };
   }
   return { exists: true, paused: v.paused };
+}
+
+// Press YouTube's own Skip button if it is offered; report how long until it is (never fast-forwards an ad).
+function skipAd() {
+  const player = document.querySelector(".html5-video-player");
+  const ad = !!player && player.classList.contains("ad-showing");
+  if (!ad) return { ad: false, skipped: false };
+  const sel = ".ytp-skip-ad-button, .ytp-ad-skip-button, .ytp-ad-skip-button-modern, button[id^='skip-button']";
+  const b = [...document.querySelectorAll(sel)].find((el) => el.getClientRects().length > 0);
+  if (b) {
+    b.click();
+    return { ad: true, skipped: true };
+  }
+  const wait = document.querySelector(".ytp-preview-ad__text, .ytp-ad-preview-text, .ytp-ad-preview-container");
+  return { ad: true, skipped: false, wait: wait ? wait.textContent.trim().slice(0, 20) : "" };
 }
 
 // ------------------------------------------------------------------ social (only after approval on the phone)
@@ -339,7 +356,7 @@ chrome.runtime.onStartup.addListener(connect);
 chrome.runtime.onInstalled.addListener(connect);
 chrome.alarms.onAlarm.addListener((a) => a.name === "reconnect" && connect());
 chrome.storage.onChanged.addListener((changes, area) => {
-  if (area !== "local") return;
+  if (area !== "local" || !("token" in changes || "port" in changes || "enabled" in changes)) return;
   if (state === "wrong-token") state = "disconnected";
   if (ws) ws.close();
   ws = null;

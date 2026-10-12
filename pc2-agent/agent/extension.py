@@ -239,6 +239,12 @@ class ExtensionBrowser:
                                                                               and not state.get("paused")),
                 "position_s": round(float(state.get("time") or 0), 1)}
 
+    def youtube_skip_ad(self) -> dict[str, Any]:
+        tab = self._youtube_tab("play")
+        if tab is None or not _host(tab["url"]).endswith(YT_HOST):
+            raise BrowserError("no YouTube video is open")
+        return dict(self.bridge.call("video.skip_ad", tabId=tab["id"]) or {})
+
     def tabs(self, action: str) -> dict[str, Any]:
         tabs = self._tabs()
         if action != "list" and not tabs:

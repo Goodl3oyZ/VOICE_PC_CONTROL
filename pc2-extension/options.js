@@ -9,13 +9,16 @@ async function showStatus() {
   $("status").textContent = text;
   $("status").className = "status " + cls;
 }
-chrome.storage.local.get(["port", "enabled", "token"]).then((s) => {
+chrome.storage.local.get(["port", "enabled", "token", "ytAutoSkip", "ytMuteAds"]).then((s) => {
   if (s.port) $("port").value = s.port;
   $("enabled").checked = s.enabled !== false;
+  $("ytAutoSkip").checked = s.ytAutoSkip !== false;
+  $("ytMuteAds").checked = s.ytMuteAds === true;
   if (s.token) $("token").placeholder = "saved (paste to replace)";
 });
 $("save").onclick = async () => {
-  const next = { port: Number($("port").value) || 8766, enabled: $("enabled").checked };
+  const next = { port: Number($("port").value) || 8766, enabled: $("enabled").checked,
+    ytAutoSkip: $("ytAutoSkip").checked, ytMuteAds: $("ytMuteAds").checked };
   const token = $("token").value.trim();
   if (token) next.token = token;
   await chrome.storage.local.set(next);

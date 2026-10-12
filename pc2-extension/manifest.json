@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Voice PC",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Lets the Voice PC agent on this computer search, play YouTube, browse social sites and (after your approval on the phone) like, comment, follow, post or message. Talks only to the local agent.",
   "minimum_chrome_version": "116",
   "permissions": [
@@ -28,5 +28,16 @@
   "action": {
     "default_title": "Voice PC",
     "default_popup": "options.html"
-  }
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://www.youtube.com/*"
+      ],
+      "js": [
+        "yt_ads.js"
+      ],
+      "run_at": "document_idle"
+    }
+  ]
 }

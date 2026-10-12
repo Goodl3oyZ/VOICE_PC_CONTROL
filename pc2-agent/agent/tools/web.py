@@ -3,7 +3,7 @@ PC1 marks the job tainted, so any later risk >= 2 action needs the user's confir
 from __future__ import annotations
 
 from voice_contracts.models import ToolResult
-from voice_contracts.tools import BrowserTabsArgs, OpenResultArgs, WebSearchArgs, YoutubePlayArgs
+from voice_contracts.tools import BrowserTabsArgs, NoArgs, OpenResultArgs, WebSearchArgs, YoutubePlayArgs
 
 from ..browser import BrowserError, CaptchaDetected
 from . import ToolContext, register
@@ -55,3 +55,13 @@ def youtube_play(args: YoutubePlayArgs, ctx: ToolContext) -> ToolResult:
 def browser_tabs(args: BrowserTabsArgs, ctx: ToolContext) -> ToolResult:
     r = ctx.browser.tabs(args.action)
     return ToolResult(ok=True, verified=True, untrusted=True, data={"action": args.action, **r})
+
+
+@register("youtube_skip_ad")
+@_guard
+def youtube_skip_ad(args: NoArgs, ctx: ToolContext) -> ToolResult:
+    if not hasattr(ctx.browser, "youtube_skip_ad"):
+        return ToolResult(ok=False, error="skipping ads needs the Voice PC Chrome extension")
+    d = ctx.browser.youtube_skip_ad()
+    # verified: an offered Skip button was pressed, or there was nothing to skip
+    return ToolResult(ok=True, verified=bool(d.get("skipped") or not d.get("ad")), data=d)

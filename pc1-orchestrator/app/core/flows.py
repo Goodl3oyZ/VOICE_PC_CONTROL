@@ -72,6 +72,7 @@ class Flow:
 MEDIA_CONTROLS = (
     Control("Play / Pause", "Pause the music"), Control("Next", "Next song"), Control("Previous", "Previous song"),
     Control("Volume up", "Volume up 20%"), Control("Volume down", "Volume down 20%"), Control("Mute", "Mute"),
+    Control("Skip ad", "Skip ad"),
 )
 _QUERY_MAX = 200
 

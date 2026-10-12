@@ -127,6 +127,7 @@ def _project_cmd(text: str, kb: Knowledge) -> ToolCall | None:
     return None
 
 
+SKIP_AD_RE = re.compile(r"^(skip|close|pass)\s+(the\s+|this\s+)?(youtube\s+)?(ad|ads|advert|advertisement)s?\W*$", re.I)
 WAKE_RE = re.compile(r"^(please\s+)?(wake(\s+up)?|turn\s+on|power\s+on|switch\s+on)\s+(the\s+|my\s+)?"
                      r"(pc2?|computer|laptop|notebook)(\s+up)?\W*$", re.I)
 LOOK_RE = re.compile(r"^(what('?s| is)\s+(on|in)\s+(the\s+|my\s+)?screen|describe\s+(the\s+|my\s+)?screen|"
@@ -168,6 +169,8 @@ def match_shortcut(normalized: str, kb: Knowledge) -> ToolCall | None:
     project = _project_cmd(text, kb)
     if project is not None:
         return project
+    if SKIP_AD_RE.match(text):  # before the media rules: "skip" alone means next song
+        return ToolCall(tool="youtube_skip_ad", rationale="shortcut: skip ad")
     media = _media_or_search(text)
     if media is not None:
         return media
