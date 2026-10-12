@@ -21,6 +21,7 @@ from ..adapters.notify import Broadcaster
 from ..adapters.sqlite_store import SqliteStore
 from ..core.audit_export import export_audit
 from ..core.capabilities import capabilities
+from ..core.flows import FlowError
 from ..core.orchestrator import Conflict, NotFound, Orchestrator
 from .webauth import WebAuth
 
@@ -44,6 +45,14 @@ class CommandIn(BaseModel):
 
 class ReplyIn(BaseModel):
     text: str = Field(min_length=1, max_length=1000)
+
+
+class FlowRunIn(BaseModel):
+    answers: dict[str, str] = Field(default_factory=dict, max_length=10)
+
+
+class FlowControlIn(FlowRunIn):
+    index: int = Field(ge=0, lt=20)
 
 
 class ConfirmIn(BaseModel):
@@ -147,6 +156,45 @@ def create_app(orch: Orchestrator, store: SqliteStore, broadcaster: Broadcaster,
         if not data:
             raise HTTPException(422, "empty audio")
         return await orch.submit_wake_audio(data, ctype, dev, armed)
+
+    async def _read_audio(audio: UploadFile) -> tuple[bytes, str]:
+        ctype = (audio.content_type or "").split(";")[0].strip().lower()
+        if not ctype.startswith("audio/"):
+            raise HTTPException(415, "audio required")
+        data = await audio.read(MAX_AUDIO_BYTES + 1)
+        if len(data) > MAX_AUDIO_BYTES:
+            raise HTTPException(413, "audio too large")
+        if not data:
+            raise HTTPException(422, "empty audio")
+        return data, ctype
+
+    @app.get("/flows")
+    async def flows(_: Device) -> list[dict[str, Any]]:
+        return orch.flows()
+
+    @app.post("/flows/{flow_id}/run")
+    async def run_flow(flow_id: str, body: FlowRunIn, dev: Device) -> dict[str, Any]:
+        try:
+            job = await orch.run_flow(flow_id, body.answers, dev)
+        except FlowError as e:
+            raise HTTPException(422, str(e)) from e
+        return {"job": job.public() if job else None}
+
+    @app.post("/flows/{flow_id}/control")
+    async def flow_control(flow_id: str, body: FlowControlIn, dev: Device) -> dict[str, Any]:
+        try:
+            return (await orch.run_flow_control(flow_id, body.index, body.answers, dev)).public()
+        except FlowError as e:
+            raise HTTPException(422, str(e)) from e
+
+    @app.post("/stt")
+    async def stt(_: Device, audio: UploadFile = File(...)) -> dict[str, str]:
+        """Voice answer for a wizard stage: returns the text only (no job, not stored)."""
+        data, ctype = await _read_audio(audio)
+        try:
+            return {"text": await orch.transcribe(data, ctype)}
+        except TimeoutError as e:
+            raise HTTPException(504, "speech recognition took too long") from e
 
     @app.get("/jobs")
     async def jobs(_: Device, limit: int = Query(50, ge=1, le=200)) -> list[dict[str, Any]]:

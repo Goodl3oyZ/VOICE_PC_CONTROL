@@ -29,6 +29,7 @@ from ..ports import (
 )
 from .aliases import AliasNormalizer
 from .capabilities import help_summary, is_help
+from .flows import FLOWS, control_command, flow_trigger, public_flows, resolve
 from .i18n import YES_WORDS, Messages, is_english
 from .jobs import Job, JobState, new_job_id
 from .knowledge import Knowledge
@@ -99,13 +100,32 @@ class Orchestrator:
         self._breaker_until = 0.0
 
     # ------------------------------------------------------------------ public use cases
-    async def submit_text(self, text: str, device: str) -> Job:
+    async def submit_text(self, text: str, device: str, flow: str | None = None) -> Job:
         text = text.strip()
         if not text:
             raise ValueError("empty command")
         job = Job(id=new_job_id(self.clock()), device=device, source="text", text=text[:1000],
-                  created_at=self.clock(), updated_at=self.clock())
+                  created_at=self.clock(), updated_at=self.clock(), flow=flow)
         return await self._start(job)
+
+    def flows(self) -> list[dict[str, Any]]:
+        return public_flows(self.kb, self.store.get_setting)
+
+    async def run_flow(self, flow_id: str, answers: dict[str, str], device: str) -> Job | None:
+        """A finished wizard: checked answers -> an ordinary command (same policy/approval/audit path).
+        None when the flow only opens its controls (e.g. "Control what's playing")."""
+        command, remember = resolve(flow_id, answers, self.kb)
+        for key, value in remember.items():  # "remember last used" (e.g. the music app)
+            self.store.set_setting(key, value)
+        return None if command is None else await self.submit_text(command, device, flow=flow_id)
+
+    async def run_flow_control(self, flow_id: str, index: int, answers: dict[str, str], device: str) -> Job:
+        return await self.submit_text(control_command(flow_id, index, answers, self.kb), device, flow=flow_id)
+
+    async def transcribe(self, audio: bytes, mime: str) -> str:
+        """Voice answer to a wizard stage: text only, no job, nothing stored (like ignored hands-free speech)."""
+        tr = await asyncio.wait_for(self.stt.transcribe(audio, mime), self.cfg.stt_timeout_s)
+        return tr.text.strip()
 
     async def submit_audio(self, audio: bytes, mime: str, device: str) -> Job:
         job = Job(id=new_job_id(self.clock()), device=device, source="audio",
@@ -334,6 +354,13 @@ class Orchestrator:
                 await self._fail(job, self.t("only_english"), "rejected_language")
                 return
             job.normalized = self.normalize(job.text)
+        if job.flow is None and (flow := flow_trigger(job.normalized)) is not None:
+            # "YouTube", "open Cursor": the phone opens that app's wizard; nothing is sent to PC2
+            await self._move(job, S.PLANNING)
+            job.planner, job.flow = "flow", flow
+            job.summary = f"Opened the {FLOWS[flow].title} flow on your phone"
+            await self._done(job)
+            return
         if is_help(job.normalized):  # answered by PC1 itself; nothing is sent to PC2
             await self._move(job, S.PLANNING)
             job.planner, job.summary = "help", help_summary(self.kb, self.cfg.language)

@@ -17,6 +17,7 @@ import { CommandGuide } from "./components/CommandGuide";
 import { OfflineBanner } from "./components/OfflineBanner";
 import { InstallPrompt } from "./components/InstallPrompt";
 import { EnglishOnlyNotice } from "./components/EnglishOnlyNotice";
+import { AppsTab } from "./components/AppsTab";
 import { BottomNav, type NavTab } from "./components/BottomNav";
 import type { OrbState } from "./components/AIOrb";
 
@@ -279,6 +280,20 @@ function Remote({ api, email, theme, onToggleTheme, onSessionLost, onLogout, onU
   const activeJobsCount = jobs.filter(isActive).length;
 
   const [navTab, setNavTab] = useState<NavTab>("home");
+  const [openFlow, setOpenFlow] = useState<string | null>(null);
+  const flowOpened = useRef(new Set<string>());
+
+  // "YouTube" / "open Cursor" said on this phone: PC1 answers with a flow job -> open that wizard
+  useEffect(() => {
+    for (const j of jobs) {
+      if (j.planner !== "flow" || !j.flow || j.state !== "done" || !myJobs.current.has(j.id)) continue;
+      if (flowOpened.current.has(j.id)) continue;
+      flowOpened.current.add(j.id);
+      setOpenFlow(j.flow);
+      setNavTab("apps");
+    }
+  }, [jobs]);
+  const onFlowOpened = useCallback(() => setOpenFlow(null), []);
   const [flash, setFlash] = useState<"success" | "error" | null>(null);
   const prevJobStates = useRef<Map<string, string>>(new Map());
 
@@ -413,6 +428,20 @@ function Remote({ api, email, theme, onToggleTheme, onSessionLost, onLogout, onU
                 onOpenGuide={() => setIsGuideOpen(true)}
               />
             </section>
+          </div>
+        )}
+
+        {navTab === "apps" && (
+          <div className="tab-pane tab-apps animate-fade-in">
+            <AppsTab
+              api={api}
+              jobs={jobs}
+              openFlow={openFlow}
+              onOpened={onFlowOpened}
+              onJob={track}
+              onUpdate={(j) => setJobs((l) => upsertJob(l, j))}
+              onError={handleError}
+            />
           </div>
         )}
 

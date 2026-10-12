@@ -32,6 +32,39 @@ export interface Job {
   error: string | null;
   outcome: string | null;
   timings_ms: Record<string, number>;
+  planner?: string | null;
+  flow?: string | null; // the app flow this job belongs to (or that "open YouTube" opens)
+}
+
+/** App flows (redesign step 1): PC1 describes each app as stages; the phone draws them as wizard screens. */
+export interface FlowOption {
+  value: string;
+  label: string;
+  hint: string;
+  available: boolean;
+}
+
+export interface FlowStage {
+  id: string;
+  kind: "choice" | "text";
+  question: string;
+  placeholder: string;
+  when: { stage: string; values: string[] } | null;
+  default: string | null;
+  options: FlowOption[];
+}
+
+export interface FlowDef {
+  id: string;
+  title: string;
+  subtitle: string;
+  icon: string;
+  group: string;
+  available: boolean;
+  coming: string;
+  pick_results: boolean;
+  stages: FlowStage[];
+  controls: { label: string; command: string }[];
 }
 
 export type ServerEvent =
@@ -107,6 +140,18 @@ export class Api {
   stop = () => this.req<{ cancelled: string[]; pc2_stopped: boolean }>("POST", "/stop");
   jobs = (limit = 50) => this.req<Job[]>("GET", `/jobs?limit=${limit}`);
   status = () => this.req<{ pc2_online: boolean; pc2: Record<string, unknown> }>("GET", "/status");
+
+  flows = () => this.req<FlowDef[]>("GET", "/flows");
+  runFlow = (id: string, answers: Record<string, string>) =>
+    this.req<{ job: Job | null }>("POST", `/flows/${encodeURIComponent(id)}/run`, JSON.stringify({ answers }));
+  flowControl = (id: string, index: number, answers: Record<string, string>) =>
+    this.req<Job>("POST", `/flows/${encodeURIComponent(id)}/control`, JSON.stringify({ index, answers }));
+  /** Voice answer for a wizard stage: text only, PC1 creates no job. */
+  transcribe = (blob: Blob) => {
+    const form = new FormData();
+    form.append("audio", blob, `answer.${blob.type.includes("mp4") ? "m4a" : "webm"}`);
+    return this.req<{ text: string }>("POST", "/stt", form, false);
+  };
 
   me = () => this.req<AuthState>("GET", "/auth/me");
   capabilities = () => this.req<Capabilities>("GET", "/capabilities");

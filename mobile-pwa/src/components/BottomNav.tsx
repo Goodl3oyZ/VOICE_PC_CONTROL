@@ -1,6 +1,6 @@
-import { HomeIcon, HistoryIcon, SettingsIcon } from "./Icons";
+import { GridIcon, HomeIcon, HistoryIcon, SettingsIcon } from "./Icons";
 
-export type NavTab = "home" | "activity" | "settings";
+export type NavTab = "home" | "apps" | "activity" | "settings";
 
 interface BottomNavProps {
   active: NavTab;
@@ -8,7 +8,7 @@ interface BottomNavProps {
   activityCount?: number;
 }
 
-/** Fixed bottom navigation bar — Home / Activity / Settings. */
+/** Fixed bottom navigation bar — Home / Apps / Activity / Settings. */
 export function BottomNav({ active, onChange, activityCount = 0 }: BottomNavProps) {
   return (
     <nav className="bottom-nav" aria-label="Main navigation">
@@ -20,6 +20,16 @@ export function BottomNav({ active, onChange, activityCount = 0 }: BottomNavProp
       >
         <HomeIcon size={22} />
         <span className="bottom-nav-label">Home</span>
+      </button>
+
+      <button
+        type="button"
+        className={`bottom-nav-item ${active === "apps" ? "active" : ""}`}
+        onClick={() => onChange("apps")}
+        aria-current={active === "apps" ? "page" : undefined}
+      >
+        <GridIcon size={22} />
+        <span className="bottom-nav-label">Apps</span>
       </button>
 
       <button

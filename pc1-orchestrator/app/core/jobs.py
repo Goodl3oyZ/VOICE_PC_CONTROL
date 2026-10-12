@@ -79,6 +79,7 @@ class Job:
     planner: str | None = None  # "shortcut" | "llm"
     timings_ms: dict[str, int] = field(default_factory=dict)
     history: list[dict[str, str]] = field(default_factory=list)  # clarification Q/A
+    flow: str | None = None  # app flow this job belongs to (or that a spoken "open YouTube" opens)
 
     @property
     def terminal(self) -> bool:
