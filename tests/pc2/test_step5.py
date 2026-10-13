@@ -5,7 +5,7 @@ import base64
 import hashlib
 import json
 import threading
-from pathlib import Path
+from pathlib import PureWindowsPath
 
 import pytest
 
@@ -144,7 +144,7 @@ def test_office_copy_never_overwrites(tmp_path):
 
 def test_office_mru_line_format():
     m = office._MRU_ITEM.search("[F00000000][T01DD1613C41E1B40][O00000000]*C:\\Users\\me\\Docs\\Plan.docx")
-    assert m and Path(m["path"]).name == "Plan.docx"
+    assert m and PureWindowsPath(m["path"]).name == "Plan.docx"  # Windows path, also on Linux CI
 
 
 def test_office_expired_license_is_explained():

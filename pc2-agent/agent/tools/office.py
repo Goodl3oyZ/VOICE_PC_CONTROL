@@ -125,7 +125,7 @@ def office_open(args: OfficeOpenArgs, ctx: ToolContext) -> ToolResult:
             name = d.Name
         try:
             o.Activate() if args.app != "powerpoint" else d.Windows(1).Activate()
-        except Exception:  # noqa: BLE001, S110 — bringing the window forward is best effort
+        except Exception:  # noqa: BLE001, S110  # nosec B110 — bringing the window forward is best effort
             pass
     except OfficeError as e:
         return ToolResult(ok=False, error=str(e))
