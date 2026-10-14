@@ -9,9 +9,12 @@ def test_demo_data_is_up_to_date():
 
 
 def test_demo_data_has_no_private_names():
-    text = render().lower()
-    for private in ("panud", "kingfluk", "flukelnwza", "portfolio", "tdee", "webecommerce", "192.168."):
-        assert private not in text
+    """Only the generic knowledge file and the made-up PC: no real user folders, hosts or found projects."""
+    import re
+    text = render()
+    assert set(re.findall(r"C:\\Users\\([^\\]+)", text)) <= {"you"}
+    assert not re.search(r"(?:10|192\.168|100)\.\d+\.\d+", text)
+    assert "my-website" in text and ".online" not in text
 
 
 def test_demo_page_needs_no_sign_in_but_the_api_still_does(rig, tmp_path):
