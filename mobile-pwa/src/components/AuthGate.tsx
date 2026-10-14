@@ -58,6 +58,9 @@ export function LoginScreen({ auth }: { auth: AuthState }) {
         ) : (
           <div className="setup-error-msg">Google sign-in is not configured on the server</div>
         )}
+        <a className="setup-demo-link" href="/demo">
+          Just looking? Try the demo (made-up data)
+        </a>
       </div>
     </div>
   );

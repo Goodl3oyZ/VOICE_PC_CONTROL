@@ -1,0 +1,1488 @@
+{
+ "flows": [
+  {
+   "id": "youtube",
+   "title": "YouTube",
+   "subtitle": "Play, search, control",
+   "icon": "youtube",
+   "group": "Watch & listen",
+   "available": true,
+   "coming": "",
+   "pick_results": true,
+   "stages": [
+    {
+     "id": "what",
+     "kind": "choice",
+     "question": "What do you want?",
+     "placeholder": "",
+     "when": null,
+     "default": null,
+     "options": [
+      {
+       "value": "play",
+       "label": "Play something now",
+       "hint": "Plays the first match",
+       "available": true
+      },
+      {
+       "value": "search",
+       "label": "Search and pick",
+       "hint": "Shows the top 5 results",
+       "available": true
+      },
+      {
+       "value": "controls",
+       "label": "Control what's playing",
+       "hint": "Pause, next, volume",
+       "available": true
+      }
+     ]
+    },
+    {
+     "id": "query",
+     "kind": "text",
+     "question": "What should I look for?",
+     "placeholder": "lofi hip hop, cooking pasta…",
+     "when": {
+      "stage": "what",
+      "values": [
+       "play",
+       "search"
+      ]
+     },
+     "default": null,
+     "options": []
+    }
+   ],
+   "controls": [
+    {
+     "label": "Play / Pause",
+     "command": "Pause the music",
+     "when": null
+    },
+    {
+     "label": "Next",
+     "command": "Next song",
+     "when": null
+    },
+    {
+     "label": "Previous",
+     "command": "Previous song",
+     "when": null
+    },
+    {
+     "label": "Volume up",
+     "command": "Volume up 20%",
+     "when": null
+    },
+    {
+     "label": "Volume down",
+     "command": "Volume down 20%",
+     "when": null
+    },
+    {
+     "label": "Mute",
+     "command": "Mute",
+     "when": null
+    },
+    {
+     "label": "Skip ad",
+     "command": "Skip ad",
+     "when": null
+    }
+   ],
+   "followup": null
+  },
+  {
+   "id": "music",
+   "title": "Music",
+   "subtitle": "Play by name",
+   "icon": "music",
+   "group": "Watch & listen",
+   "available": true,
+   "coming": "",
+   "pick_results": false,
+   "stages": [
+    {
+     "id": "app",
+     "kind": "choice",
+     "question": "Which app for music?",
+     "placeholder": "",
+     "when": null,
+     "default": null,
+     "options": [
+      {
+       "value": "youtube",
+       "label": "YouTube",
+       "hint": "",
+       "available": true
+      },
+      {
+       "value": "tiktok",
+       "label": "TikTok",
+       "hint": "Arrives with the Chrome extension (build step 2)",
+       "available": false
+      }
+     ]
+    },
+    {
+     "id": "query",
+     "kind": "text",
+     "question": "What should I play?",
+     "placeholder": "lofi, relaxing piano…",
+     "when": null,
+     "default": null,
+     "options": []
+    }
+   ],
+   "controls": [
+    {
+     "label": "Play / Pause",
+     "command": "Pause the music",
+     "when": null
+    },
+    {
+     "label": "Next",
+     "command": "Next song",
+     "when": null
+    },
+    {
+     "label": "Previous",
+     "command": "Previous song",
+     "when": null
+    },
+    {
+     "label": "Volume up",
+     "command": "Volume up 20%",
+     "when": null
+    },
+    {
+     "label": "Volume down",
+     "command": "Volume down 20%",
+     "when": null
+    },
+    {
+     "label": "Mute",
+     "command": "Mute",
+     "when": null
+    },
+    {
+     "label": "Skip ad",
+     "command": "Skip ad",
+     "when": null
+    }
+   ],
+   "followup": null
+  },
+  {
+   "id": "search",
+   "title": "Search",
+   "subtitle": "Google results on the phone",
+   "icon": "search",
+   "group": "Web",
+   "available": true,
+   "coming": "",
+   "pick_results": true,
+   "stages": [
+    {
+     "id": "query",
+     "kind": "text",
+     "question": "What do you want to search for?",
+     "placeholder": "cheap flights to Tokyo",
+     "when": null,
+     "default": null,
+     "options": []
+    }
+   ],
+   "controls": [
+    {
+     "label": "Close this tab",
+     "command": "Close this tab",
+     "when": null
+    },
+    {
+     "label": "What tabs are open?",
+     "command": "What tabs are open?",
+     "when": null
+    }
+   ],
+   "followup": null
+  },
+  {
+   "id": "code",
+   "title": "Code",
+   "subtitle": "Projects, changes, review",
+   "icon": "code",
+   "group": "Work",
+   "available": true,
+   "coming": "",
+   "pick_results": false,
+   "stages": [
+    {
+     "id": "what",
+     "kind": "choice",
+     "question": "What for?",
+     "placeholder": "",
+     "when": null,
+     "default": null,
+     "options": [
+      {
+       "value": "change",
+       "label": "Change or add code",
+       "hint": "The AI edits on an ai/… branch, then runs the tests",
+       "available": true
+      },
+      {
+       "value": "open",
+       "label": "Just open it",
+       "hint": "Opens the project in Cursor",
+       "available": true
+      },
+      {
+       "value": "ask",
+       "label": "Ask about the code",
+       "hint": "With Cursor's agent (needs Cursor login)",
+       "available": false
+      },
+      {
+       "value": "new",
+       "label": "Start a new project",
+       "hint": "A new folder with git under your Projects folder",
+       "available": true
+      }
+     ]
+    },
+    {
+     "id": "project",
+     "kind": "choice",
+     "question": "Which project?",
+     "placeholder": "",
+     "when": {
+      "stage": "what",
+      "values": [
+       "change",
+       "open"
+      ]
+     },
+     "default": null,
+     "options": [
+      {
+       "value": "demo",
+       "label": "Demo project (AI coding sandbox)",
+       "hint": "",
+       "available": true
+      },
+      {
+       "value": "repo:my-website",
+       "label": "my-website",
+       "hint": "Found on the PC · you approve once, then pick it again",
+       "available": true
+      }
+     ]
+    },
+    {
+     "id": "request",
+     "kind": "text",
+     "question": "What should change?",
+     "placeholder": "add a function that…",
+     "when": {
+      "stage": "what",
+      "values": [
+       "change"
+      ]
+     },
+     "default": null,
+     "options": []
+    },
+    {
+     "id": "name",
+     "kind": "text",
+     "question": "Name the new project",
+     "placeholder": "todo-app",
+     "when": {
+      "stage": "what",
+      "values": [
+       "new"
+      ]
+     },
+     "default": null,
+     "options": []
+    },
+    {
+     "id": "description",
+     "kind": "text",
+     "question": "Describe it in one sentence",
+     "placeholder": "a todo app in React with dark mode",
+     "when": {
+      "stage": "what",
+      "values": [
+       "new"
+      ]
+     },
+     "default": null,
+     "options": []
+    }
+   ],
+   "controls": [
+    {
+     "label": "Show the changes",
+     "command": "show the diff for {project}",
+     "when": null
+    },
+    {
+     "label": "Run the tests",
+     "command": "run the tests in {project}",
+     "when": null
+    },
+    {
+     "label": "Revert the AI changes",
+     "command": "revert the changes in {project}",
+     "when": null
+    }
+   ],
+   "followup": null
+  },
+  {
+   "id": "apps",
+   "title": "Open an app",
+   "subtitle": "Any app on the allowlist",
+   "icon": "apps",
+   "group": "PC",
+   "available": true,
+   "coming": "",
+   "pick_results": false,
+   "stages": [
+    {
+     "id": "app",
+     "kind": "choice",
+     "question": "Which app?",
+     "placeholder": "",
+     "when": null,
+     "default": null,
+     "options": [
+      {
+       "value": "chrome",
+       "label": "Chrome",
+       "hint": "",
+       "available": true
+      },
+      {
+       "value": "notepad",
+       "label": "Notepad",
+       "hint": "",
+       "available": true
+      },
+      {
+       "value": "spotify",
+       "label": "Spotify",
+       "hint": "",
+       "available": true
+      },
+      {
+       "value": "calculator",
+       "label": "Calculator",
+       "hint": "",
+       "available": true
+      },
+      {
+       "value": "explorer",
+       "label": "File Explorer",
+       "hint": "",
+       "available": true
+      },
+      {
+       "value": "cursor",
+       "label": "Cursor",
+       "hint": "",
+       "available": true
+      },
+      {
+       "value": "vscode",
+       "label": "VS Code",
+       "hint": "",
+       "available": true
+      }
+     ]
+    }
+   ],
+   "controls": [],
+   "followup": null
+  },
+  {
+   "id": "pc",
+   "title": "PC",
+   "subtitle": "Status, screen, wake",
+   "icon": "monitor",
+   "group": "PC",
+   "available": true,
+   "coming": "",
+   "pick_results": false,
+   "stages": [],
+   "controls": [
+    {
+     "label": "What's running?",
+     "command": "Show status",
+     "when": null
+    },
+    {
+     "label": "Look at the screen",
+     "command": "What's on the screen?",
+     "when": null
+    },
+    {
+     "label": "Wake up the PC",
+     "command": "Wake up the PC",
+     "when": null
+    },
+    {
+     "label": "Stop everything",
+     "command": "Stop",
+     "when": null
+    }
+   ],
+   "followup": null
+  },
+  {
+   "id": "tiktok",
+   "title": "TikTok",
+   "subtitle": "For You, search, like",
+   "icon": "tiktok",
+   "group": "Watch & listen",
+   "available": true,
+   "coming": "",
+   "pick_results": false,
+   "stages": [
+    {
+     "id": "what",
+     "kind": "choice",
+     "question": "What do you want to do?",
+     "placeholder": "",
+     "when": null,
+     "default": null,
+     "options": [
+      {
+       "value": "foryou",
+       "label": "For You",
+       "hint": "",
+       "available": true
+      },
+      {
+       "value": "following",
+       "label": "Following",
+       "hint": "",
+       "available": true
+      },
+      {
+       "value": "search",
+       "label": "Search",
+       "hint": "",
+       "available": true
+      },
+      {
+       "value": "profile",
+       "label": "Open a profile",
+       "hint": "",
+       "available": true
+      },
+      {
+       "value": "like",
+       "label": "Like the open post",
+       "hint": "You approve it on the phone",
+       "available": true
+      },
+      {
+       "value": "comment",
+       "label": "Comment on the open post",
+       "hint": "You approve the exact text",
+       "available": true
+      },
+      {
+       "value": "follow",
+       "label": "Follow the open profile",
+       "hint": "You approve it on the phone",
+       "available": true
+      }
+     ]
+    },
+    {
+     "id": "query",
+     "kind": "text",
+     "question": "Search for what?",
+     "placeholder": "cats, news…",
+     "when": {
+      "stage": "what",
+      "values": [
+       "search"
+      ]
+     },
+     "default": null,
+     "options": []
+    },
+    {
+     "id": "account",
+     "kind": "text",
+     "question": "Which account?",
+     "placeholder": "account name",
+     "when": {
+      "stage": "what",
+      "values": [
+       "profile"
+      ]
+     },
+     "default": null,
+     "options": []
+    },
+    {
+     "id": "to",
+     "kind": "text",
+     "question": "Send it to which account?",
+     "placeholder": "account name",
+     "when": {
+      "stage": "what",
+      "values": [
+       "message"
+      ]
+     },
+     "default": null,
+     "options": []
+    },
+    {
+     "id": "text",
+     "kind": "text",
+     "question": "What should it say? You will approve the exact text.",
+     "placeholder": "Congrats!",
+     "when": {
+      "stage": "what",
+      "values": [
+       "comment",
+       "post",
+       "message"
+      ]
+     },
+     "default": null,
+     "options": []
+    }
+   ],
+   "controls": [
+    {
+     "label": "What tabs are open?",
+     "command": "What tabs are open?",
+     "when": null
+    },
+    {
+     "label": "Close this tab",
+     "command": "Close this tab",
+     "when": null
+    }
+   ],
+   "followup": null
+  },
+  {
+   "id": "facebook",
+   "title": "Facebook",
+   "subtitle": "Feed, Messenger, post",
+   "icon": "facebook",
+   "group": "Social",
+   "available": true,
+   "coming": "",
+   "pick_results": false,
+   "stages": [
+    {
+     "id": "what",
+     "kind": "choice",
+     "question": "What do you want to do?",
+     "placeholder": "",
+     "when": null,
+     "default": null,
+     "options": [
+      {
+       "value": "feed",
+       "label": "Feed",
+       "hint": "",
+       "available": true
+      },
+      {
+       "value": "search",
+       "label": "Search",
+       "hint": "",
+       "available": true
+      },
+      {
+       "value": "profile",
+       "label": "Open a profile",
+       "hint": "",
+       "available": true
+      },
+      {
+       "value": "messages",
+       "label": "Messages",
+       "hint": "",
+       "available": true
+      },
+      {
+       "value": "notifications",
+       "label": "Notifications",
+       "hint": "",
+       "available": true
+      },
+      {
+       "value": "like",
+       "label": "Like the open post",
+       "hint": "You approve it on the phone",
+       "available": true
+      },
+      {
+       "value": "comment",
+       "label": "Comment on the open post",
+       "hint": "You approve the exact text",
+       "available": true
+      },
+      {
+       "value": "follow",
+       "label": "Follow the open profile",
+       "hint": "You approve it on the phone",
+       "available": true
+      },
+      {
+       "value": "post",
+       "label": "Write a new post",
+       "hint": "You approve the exact text",
+       "available": true
+      },
+      {
+       "value": "message",
+       "label": "Send a message",
+       "hint": "You approve the exact text",
+       "available": true
+      }
+     ]
+    },
+    {
+     "id": "query",
+     "kind": "text",
+     "question": "Search for what?",
+     "placeholder": "cats, news…",
+     "when": {
+      "stage": "what",
+      "values": [
+       "search"
+      ]
+     },
+     "default": null,
+     "options": []
+    },
+    {
+     "id": "account",
+     "kind": "text",
+     "question": "Which account?",
+     "placeholder": "account name",
+     "when": {
+      "stage": "what",
+      "values": [
+       "profile"
+      ]
+     },
+     "default": null,
+     "options": []
+    },
+    {
+     "id": "to",
+     "kind": "text",
+     "question": "Send it to which account?",
+     "placeholder": "account name",
+     "when": {
+      "stage": "what",
+      "values": [
+       "message"
+      ]
+     },
+     "default": null,
+     "options": []
+    },
+    {
+     "id": "text",
+     "kind": "text",
+     "question": "What should it say? You will approve the exact text.",
+     "placeholder": "Congrats!",
+     "when": {
+      "stage": "what",
+      "values": [
+       "comment",
+       "post",
+       "message"
+      ]
+     },
+     "default": null,
+     "options": []
+    }
+   ],
+   "controls": [
+    {
+     "label": "What tabs are open?",
+     "command": "What tabs are open?",
+     "when": null
+    },
+    {
+     "label": "Close this tab",
+     "command": "Close this tab",
+     "when": null
+    }
+   ],
+   "followup": null
+  },
+  {
+   "id": "instagram",
+   "title": "Instagram",
+   "subtitle": "Feed, Reels, DMs",
+   "icon": "instagram",
+   "group": "Social",
+   "available": true,
+   "coming": "",
+   "pick_results": false,
+   "stages": [
+    {
+     "id": "what",
+     "kind": "choice",
+     "question": "What do you want to do?",
+     "placeholder": "",
+     "when": null,
+     "default": null,
+     "options": [
+      {
+       "value": "feed",
+       "label": "Feed",
+       "hint": "",
+       "available": true
+      },
+      {
+       "value": "reels",
+       "label": "Reels",
+       "hint": "",
+       "available": true
+      },
+      {
+       "value": "search",
+       "label": "Search",
+       "hint": "",
+       "available": true
+      },
+      {
+       "value": "profile",
+       "label": "Open a profile",
+       "hint": "",
+       "available": true
+      },
+      {
+       "value": "messages",
+       "label": "Messages",
+       "hint": "",
+       "available": true
+      },
+      {
+       "value": "like",
+       "label": "Like the open post",
+       "hint": "You approve it on the phone",
+       "available": true
+      },
+      {
+       "value": "comment",
+       "label": "Comment on the open post",
+       "hint": "You approve the exact text",
+       "available": true
+      },
+      {
+       "value": "follow",
+       "label": "Follow the open profile",
+       "hint": "You approve it on the phone",
+       "available": true
+      },
+      {
+       "value": "message",
+       "label": "Send a message",
+       "hint": "You approve the exact text",
+       "available": true
+      }
+     ]
+    },
+    {
+     "id": "query",
+     "kind": "text",
+     "question": "Search for what?",
+     "placeholder": "cats, news…",
+     "when": {
+      "stage": "what",
+      "values": [
+       "search"
+      ]
+     },
+     "default": null,
+     "options": []
+    },
+    {
+     "id": "account",
+     "kind": "text",
+     "question": "Which account?",
+     "placeholder": "account name",
+     "when": {
+      "stage": "what",
+      "values": [
+       "profile"
+      ]
+     },
+     "default": null,
+     "options": []
+    },
+    {
+     "id": "to",
+     "kind": "text",
+     "question": "Send it to which account?",
+     "placeholder": "account name",
+     "when": {
+      "stage": "what",
+      "values": [
+       "message"
+      ]
+     },
+     "default": null,
+     "options": []
+    },
+    {
+     "id": "text",
+     "kind": "text",
+     "question": "What should it say? You will approve the exact text.",
+     "placeholder": "Congrats!",
+     "when": {
+      "stage": "what",
+      "values": [
+       "comment",
+       "post",
+       "message"
+      ]
+     },
+     "default": null,
+     "options": []
+    }
+   ],
+   "controls": [
+    {
+     "label": "What tabs are open?",
+     "command": "What tabs are open?",
+     "when": null
+    },
+    {
+     "label": "Close this tab",
+     "command": "Close this tab",
+     "when": null
+    }
+   ],
+   "followup": null
+  },
+  {
+   "id": "x",
+   "title": "X",
+   "subtitle": "Timeline, search, post",
+   "icon": "x",
+   "group": "Social",
+   "available": true,
+   "coming": "",
+   "pick_results": false,
+   "stages": [
+    {
+     "id": "what",
+     "kind": "choice",
+     "question": "What do you want to do?",
+     "placeholder": "",
+     "when": null,
+     "default": null,
+     "options": [
+      {
+       "value": "feed",
+       "label": "Feed",
+       "hint": "",
+       "available": true
+      },
+      {
+       "value": "search",
+       "label": "Search",
+       "hint": "",
+       "available": true
+      },
+      {
+       "value": "profile",
+       "label": "Open a profile",
+       "hint": "",
+       "available": true
+      },
+      {
+       "value": "messages",
+       "label": "Messages",
+       "hint": "",
+       "available": true
+      },
+      {
+       "value": "notifications",
+       "label": "Notifications",
+       "hint": "",
+       "available": true
+      },
+      {
+       "value": "like",
+       "label": "Like the open post",
+       "hint": "You approve it on the phone",
+       "available": true
+      },
+      {
+       "value": "comment",
+       "label": "Comment on the open post",
+       "hint": "You approve the exact text",
+       "available": true
+      },
+      {
+       "value": "follow",
+       "label": "Follow the open profile",
+       "hint": "You approve it on the phone",
+       "available": true
+      },
+      {
+       "value": "post",
+       "label": "Write a new post",
+       "hint": "You approve the exact text",
+       "available": true
+      },
+      {
+       "value": "message",
+       "label": "Send a message",
+       "hint": "You approve the exact text",
+       "available": true
+      }
+     ]
+    },
+    {
+     "id": "query",
+     "kind": "text",
+     "question": "Search for what?",
+     "placeholder": "cats, news…",
+     "when": {
+      "stage": "what",
+      "values": [
+       "search"
+      ]
+     },
+     "default": null,
+     "options": []
+    },
+    {
+     "id": "account",
+     "kind": "text",
+     "question": "Which account?",
+     "placeholder": "account name",
+     "when": {
+      "stage": "what",
+      "values": [
+       "profile"
+      ]
+     },
+     "default": null,
+     "options": []
+    },
+    {
+     "id": "to",
+     "kind": "text",
+     "question": "Send it to which account?",
+     "placeholder": "account name",
+     "when": {
+      "stage": "what",
+      "values": [
+       "message"
+      ]
+     },
+     "default": null,
+     "options": []
+    },
+    {
+     "id": "text",
+     "kind": "text",
+     "question": "What should it say? You will approve the exact text.",
+     "placeholder": "Congrats!",
+     "when": {
+      "stage": "what",
+      "values": [
+       "comment",
+       "post",
+       "message"
+      ]
+     },
+     "default": null,
+     "options": []
+    }
+   ],
+   "controls": [
+    {
+     "label": "What tabs are open?",
+     "command": "What tabs are open?",
+     "when": null
+    },
+    {
+     "label": "Close this tab",
+     "command": "Close this tab",
+     "when": null
+    }
+   ],
+   "followup": null
+  },
+  {
+   "id": "obs",
+   "title": "OBS",
+   "subtitle": "Record and stream",
+   "icon": "obs",
+   "group": "Play",
+   "available": true,
+   "coming": "",
+   "pick_results": false,
+   "stages": [
+    {
+     "id": "what",
+     "kind": "choice",
+     "question": "What do you want to do?",
+     "placeholder": "",
+     "when": null,
+     "default": null,
+     "options": [
+      {
+       "value": "start_recording",
+       "label": "Start recording",
+       "hint": "",
+       "available": true
+      },
+      {
+       "value": "stop_recording",
+       "label": "Stop recording",
+       "hint": "",
+       "available": true
+      },
+      {
+       "value": "start_stream",
+       "label": "Start streaming",
+       "hint": "Goes public: you approve it on the phone",
+       "available": true
+      },
+      {
+       "value": "stop_streaming",
+       "label": "Stop streaming",
+       "hint": "Always allowed, right away",
+       "available": true
+      },
+      {
+       "value": "set_scene",
+       "label": "Switch scene",
+       "hint": "",
+       "available": true
+      },
+      {
+       "value": "status",
+       "label": "What's OBS doing?",
+       "hint": "",
+       "available": true
+      }
+     ]
+    },
+    {
+     "id": "scene",
+     "kind": "text",
+     "question": "Which scene?",
+     "placeholder": "Scene name",
+     "when": {
+      "stage": "what",
+      "values": [
+       "set_scene"
+      ]
+     },
+     "default": null,
+     "options": []
+    }
+   ],
+   "controls": [
+    {
+     "label": "Start recording",
+     "command": "Start recording",
+     "when": null
+    },
+    {
+     "label": "Stop recording",
+     "command": "Stop recording",
+     "when": null
+    },
+    {
+     "label": "Stop streaming",
+     "command": "Stop streaming",
+     "when": null
+    },
+    {
+     "label": "Status",
+     "command": "Status",
+     "when": null
+    }
+   ],
+   "followup": null
+  },
+  {
+   "id": "office",
+   "title": "Office",
+   "subtitle": "Word, Excel, PowerPoint",
+   "icon": "office",
+   "group": "Work",
+   "available": true,
+   "coming": "",
+   "pick_results": false,
+   "stages": [
+    {
+     "id": "app",
+     "kind": "choice",
+     "question": "Which app?",
+     "placeholder": "",
+     "when": null,
+     "default": null,
+     "options": [
+      {
+       "value": "word",
+       "label": "Word",
+       "hint": "",
+       "available": true
+      },
+      {
+       "value": "excel",
+       "label": "Excel",
+       "hint": "",
+       "available": true
+      },
+      {
+       "value": "powerpoint",
+       "label": "PowerPoint",
+       "hint": "",
+       "available": true
+      }
+     ]
+    },
+    {
+     "id": "file_word",
+     "kind": "choice",
+     "question": "Which file?",
+     "placeholder": "",
+     "when": {
+      "stage": "app",
+      "values": [
+       "word"
+      ]
+     },
+     "default": null,
+     "options": [
+      {
+       "value": "new",
+       "label": "New blank document",
+       "hint": "",
+       "available": true
+      },
+      {
+       "value": "file:0",
+       "label": "Trip plan.docx",
+       "hint": "you\\Documents",
+       "available": true
+      }
+     ]
+    },
+    {
+     "id": "file_excel",
+     "kind": "choice",
+     "question": "Which file?",
+     "placeholder": "",
+     "when": {
+      "stage": "app",
+      "values": [
+       "excel"
+      ]
+     },
+     "default": null,
+     "options": [
+      {
+       "value": "new",
+       "label": "New blank workbook",
+       "hint": "",
+       "available": true
+      },
+      {
+       "value": "file:0",
+       "label": "Budget.xlsx",
+       "hint": "you\\Documents",
+       "available": true
+      }
+     ]
+    },
+    {
+     "id": "file_powerpoint",
+     "kind": "choice",
+     "question": "Which file?",
+     "placeholder": "",
+     "when": {
+      "stage": "app",
+      "values": [
+       "powerpoint"
+      ]
+     },
+     "default": null,
+     "options": [
+      {
+       "value": "new",
+       "label": "New blank presentation",
+       "hint": "",
+       "available": true
+      }
+     ]
+    }
+   ],
+   "controls": [
+    {
+     "label": "New paragraph",
+     "command": "New paragraph",
+     "when": {
+      "stage": "app",
+      "values": [
+       "word"
+      ]
+     }
+    },
+    {
+     "label": "Delete last sentence",
+     "command": "Delete last sentence",
+     "when": {
+      "stage": "app",
+      "values": [
+       "word"
+      ]
+     }
+    },
+    {
+     "label": "Read back last paragraph",
+     "command": "Read back last paragraph",
+     "when": {
+      "stage": "app",
+      "values": [
+       "word"
+      ]
+     }
+    },
+    {
+     "label": "Undo",
+     "command": "Undo",
+     "when": {
+      "stage": "app",
+      "values": [
+       "word"
+      ]
+     }
+    },
+    {
+     "label": "Save as a new copy",
+     "command": "Save as a new copy",
+     "when": null
+    },
+    {
+     "label": "Save (overwrite)",
+     "command": "Save (overwrite)",
+     "when": null
+    },
+    {
+     "label": "Close without saving",
+     "command": "Close without saving",
+     "when": null
+    }
+   ],
+   "followup": {
+    "label": "Dictate",
+    "placeholder": "Say a sentence and it is typed into Word…",
+    "when": {
+     "stage": "app",
+     "values": [
+      "word"
+     ]
+    }
+   }
+  },
+  {
+   "id": "steam",
+   "title": "Steam",
+   "subtitle": "Launch your games",
+   "icon": "steam",
+   "group": "Play",
+   "available": true,
+   "coming": "",
+   "pick_results": false,
+   "stages": [
+    {
+     "id": "game",
+     "kind": "choice",
+     "question": "Which game?",
+     "placeholder": "",
+     "when": null,
+     "default": null,
+     "options": [
+      {
+       "value": "570",
+       "label": "Dota 2",
+       "hint": "",
+       "available": true
+      }
+     ]
+    }
+   ],
+   "controls": [],
+   "followup": null
+  }
+ ],
+ "capabilities": {
+  "language": "en",
+  "english_only": true,
+  "groups": [
+   {
+    "id": "apps",
+    "title": "Open apps",
+    "hint": "Only apps on the allowed list",
+    "examples": [
+     "Open Chrome",
+     "Open Notepad",
+     "Open Spotify",
+     "Open Calculator",
+     "Open File Explorer",
+     "Open Cursor",
+     "Open VS Code"
+    ]
+   },
+   {
+    "id": "sites",
+    "title": "Open websites",
+    "hint": "Only allowed websites",
+    "examples": [
+     "Open YouTube",
+     "Open Google",
+     "Open Gmail",
+     "Open GitHub",
+     "Open Facebook"
+    ]
+   },
+   {
+    "id": "search",
+    "title": "Search & browse",
+    "hint": "Runs in the agent browser on PC2 and reuses its tab",
+    "examples": [
+     "Search for weather in Bangkok",
+     "Look up python asyncio",
+     "Search lofi on YouTube",
+     "Open the first result",
+     "Open result 2"
+    ]
+   },
+   {
+    "id": "music",
+    "title": "Music & video",
+    "hint": "YouTube plays in the agent browser; keys also control Spotify",
+    "examples": [
+     "Play lofi hip hop",
+     "Play bodyslam on YouTube",
+     "Pause the music",
+     "Resume",
+     "Next song",
+     "Previous song"
+    ]
+   },
+   {
+    "id": "volume",
+    "title": "Volume",
+    "hint": "1 step ≈ 2 %",
+    "examples": [
+     "Volume up 20%",
+     "Turn the volume down",
+     "Louder",
+     "Quieter",
+     "Mute"
+    ]
+   },
+   {
+    "id": "tabs",
+    "title": "Browser tabs",
+    "hint": "Tabs of the agent browser",
+    "examples": [
+     "Next tab",
+     "Previous tab",
+     "Close this tab",
+     "What tabs are open?"
+    ]
+   },
+   {
+    "id": "pc",
+    "title": "Computer",
+    "hint": "Stop works at any time",
+    "examples": [
+     "Status",
+     "What's running on the PC?",
+     "Stop everything",
+     "Wake up the PC",
+     "Help"
+    ]
+   },
+   {
+    "id": "screen",
+    "title": "Screen",
+    "hint": "The local AI looks at PC2's screen; the picture is not kept",
+    "examples": [
+     "What's on the screen?",
+     "Describe the screen"
+    ]
+   },
+   {
+    "id": "code",
+    "title": "Code projects",
+    "hint": "AI edits happen on an ai/… git branch; main is never touched",
+    "examples": [
+     "Run the tests in demo",
+     "Show the diff for demo",
+     "Revert the changes in demo"
+    ]
+   },
+   {
+    "id": "ai",
+    "title": "Just ask naturally",
+    "hint": "The local AI works out what you mean",
+    "examples": [
+     "I need to do some math",
+     "I'd like to write some notes",
+     "Take me to GitHub",
+     "It's too loud, turn it down a bit",
+     "In the demo project, add a function multiply to calc.py"
+    ]
+   }
+  ],
+  "apps": [
+   "Chrome",
+   "Notepad",
+   "Spotify",
+   "Calculator",
+   "File Explorer",
+   "Cursor",
+   "VS Code"
+  ],
+  "sites": [
+   "YouTube",
+   "Google",
+   "Gmail",
+   "GitHub",
+   "Facebook"
+  ],
+  "refused": [
+   "Commands in other languages",
+   "Apps or websites not on the allowed lists",
+   "Deleting files or changing system settings",
+   "Running shell / PowerShell commands",
+   "Payments, passwords, posting on social media",
+   "Solving CAPTCHAs (the agent stops and tells you)"
+  ]
+ }
+}

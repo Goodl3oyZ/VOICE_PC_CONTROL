@@ -104,6 +104,14 @@ export interface AuthState {
  * sees a secret. Every request carries X-Requested-With, which the server requires as CSRF protection.
  */
 export class Api {
+  /** The public demo (/demo) swaps in a client with made-up data that never calls PC1. */
+  readonly demo: boolean = false;
+
+  /** Live updates without a WebSocket (demo only); null = use /events. */
+  listen(_on: (ev: ServerEvent) => void): (() => void) | null {
+    return null;
+  }
+
   private async req<T>(method: string, path: string, body?: BodyInit, json = true): Promise<T> {
     const headers: Record<string, string> = { "X-Requested-With": "voicepc" };
     if (body !== undefined && json) headers["Content-Type"] = "application/json";

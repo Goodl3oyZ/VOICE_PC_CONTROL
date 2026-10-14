@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, type ReactNode } from "react";
 import type { JobState } from "../api";
 import type { HandsFreeState } from "../useHandsFree";
 import type { SpeechLang } from "../speechLang";
@@ -31,6 +31,8 @@ interface MicrophoneHeroProps {
   onToggleSpeak: () => void;
   speechLang: SpeechLang;
   onSpeechLang: (l: SpeechLang) => void;
+  /** Right under the status: what you said, a question/approval, or the last result. */
+  belowStatus?: ReactNode;
   onExecuteCommand: (command: string) => void;
 }
 
@@ -146,6 +148,8 @@ export function MicrophoneHero(props: MicrophoneHeroProps) {
           s.sub && <p className="hero-status-sub">{s.sub}</p>
         )}
       </div>
+
+      {props.belowStatus && <div className="hero-slot">{props.belowStatus}</div>}
 
       <div className="mic-mode-row">
         <div className="mode-switch-group" role="radiogroup" aria-label="How to use the microphone">

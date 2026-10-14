@@ -4,6 +4,7 @@ import { isActive, upsertJob } from "./labels";
 import { useRecorder } from "./useRecorder";
 import { useHandsFree } from "./useHandsFree";
 import { isSpeaking, speak, utteranceFor } from "./speech";
+import { DemoApi, isDemo } from "./demo/demoApi";
 
 import { Header } from "./components/Header";
 import { MicrophoneHero } from "./components/MicrophoneHero";
@@ -17,6 +18,7 @@ import { CommandGuide } from "./components/CommandGuide";
 import { OfflineBanner } from "./components/OfflineBanner";
 import { InstallPrompt } from "./components/InstallPrompt";
 import { HeardReview, type Heard } from "./components/HeardReview";
+import { LastResult } from "./components/LastResult";
 import { useSpeechLang } from "./speechLang";
 import { AppsTab } from "./components/AppsTab";
 import { BottomNav, type NavTab } from "./components/BottomNav";
@@ -37,7 +39,7 @@ function readTheme(): "dark" | "light" {
 
 
 export default function App() {
-  const api = useMemo(() => new Api(), []);
+  const api = useMemo(() => (isDemo() ? new DemoApi() : new Api()), []);
   const [auth, setAuth] = useState<AuthState | null>(null);
   const [authError, setAuthError] = useState<string | null>(null);
   const [theme, setTheme] = useState<"dark" | "light">(readTheme);
@@ -174,6 +176,21 @@ function Remote({ api, email, theme, onToggleTheme, onSessionLost, onLogout, onU
     let timer: number | undefined;
     let closed = false;
 
+    const onEvent = (ev: ServerEvent) => {
+      if (ev.type === "job.update") {
+        setJobs((list) => upsertJob(list, ev.job));
+      } else if (ev.type === "pc2.status") {
+        setPc2Online(ev.online);
+        if (ev.status) setPc2Data(ev.status);
+      }
+    };
+    const off = api.listen(onEvent);
+    if (off) {
+      setWsUp(true);
+      refresh();
+      return off;
+    }
+
     const connect = () => {
       ws = new WebSocket(api.eventsUrl());
       ws.onopen = () => {
@@ -183,13 +200,7 @@ function Remote({ api, email, theme, onToggleTheme, onSessionLost, onLogout, onU
       };
       ws.onmessage = (m) => {
         try {
-          const ev = JSON.parse(m.data) as ServerEvent;
-          if (ev.type === "job.update") {
-            setJobs((list) => upsertJob(list, ev.job));
-          } else if (ev.type === "pc2.status") {
-            setPc2Online(ev.online);
-            if (ev.status) setPc2Data(ev.status);
-          }
+          onEvent(JSON.parse(m.data) as ServerEvent);
         } catch {
           /* non-JSON packet */
         }
@@ -297,7 +308,19 @@ function Remote({ api, email, theme, onToggleTheme, onSessionLost, onLogout, onU
   }, [jobs, speakOn]);
 
   // Active or most recent job
-  const activeJob = jobs.find(isActive) || selectedJob || jobs[0];
+  // The newest copy of the picked job: selectedJob is a snapshot from when it was picked/started.
+  const picked = selectedJob ? jobs.find((j) => j.id === selectedJob.id) || selectedJob : null;
+  const activeJob = jobs.find(isActive) || picked || jobs[0];
+
+  // Home (owner feedback 2026-10-14): the orb stays on top. Under it: what you said (review before send),
+  // a question/approval that needs you, or one line with the last result that opens the full card.
+  const needsYou = activeJob?.state === "clarifying" || activeJob?.state === "awaiting_confirm";
+  const [detailsOpen, setDetailsOpen] = useState(false);
+  const openNext = useRef(false);
+  useEffect(() => {
+    setDetailsOpen(openNext.current); // a new command starts collapsed; one picked in Activity opens
+    openNext.current = false;
+  }, [activeJob?.id]);
   const busy = jobs.some(isActive);
   const activeJobsCount = jobs.filter(isActive).length;
 
@@ -377,6 +400,14 @@ function Remote({ api, email, theme, onToggleTheme, onSessionLost, onLogout, onU
       {/* Offline Banner */}
       <OfflineBanner />
 
+      {api.demo && (
+        <div className="demo-banner" role="note">
+          <strong>Demo</strong>
+          <span>Made-up data: try anything, nothing reaches a real PC.</span>
+          <a href="/">Owner sign-in</a>
+        </div>
+      )}
+
       {/* Main App Header */}
       <Header
         pc2Online={pc2Online}
@@ -394,39 +425,6 @@ function Remote({ api, email, theme, onToggleTheme, onSessionLost, onLogout, onU
       <main className="app-main-layout">
         {navTab === "home" && (
           <div className="tab-pane tab-home animate-fade-in">
-            {/* Active / Current Job Card */}
-            {activeJob && (
-              <section className="active-job-section" aria-label="Current command">
-                <ActiveJobCard
-                  job={activeJob}
-                  api={api}
-                  onError={handleError}
-                  onUpdate={(j) => {
-                    setJobs((l) => upsertJob(l, j));
-                    setSelectedJob(j);
-                  }}
-                  onNewJob={submit}
-                />
-              </section>
-            )}
-
-            {heard && mic.state !== "recording" && (
-              <section className="heard-section" aria-label="What you said">
-                <HeardReview
-                  heard={heard}
-                  onSend={(t) => {
-                    setHeard(null);
-                    submit(api.sendText(t));
-                  }}
-                  onRetry={() => {
-                    setHeard(null);
-                    if (mic.mode === "tap") void mic.start();
-                  }}
-                  onCancel={() => setHeard(null)}
-                />
-              </section>
-            )}
-
             {/* AI Assistant Centerpiece Hero */}
             <section className="voice-assistant-section" aria-label="Voice command">
               <MicrophoneHero
@@ -434,7 +432,41 @@ function Remote({ api, email, theme, onToggleTheme, onSessionLost, onLogout, onU
                 wsUp={wsUp}
                 pc2Online={pc2Online}
                 currentJobState={activeJob?.state}
-                currentJobText={activeJob?.text || null}
+                currentJobText={null}
+                belowStatus={
+                  heard && mic.state !== "recording" ? (
+                    <HeardReview
+                      heard={heard}
+                      onSend={(t) => {
+                        setHeard(null);
+                        submit(api.sendText(t));
+                      }}
+                      onRetry={() => {
+                        setHeard(null);
+                        if (mic.mode === "tap") void mic.start();
+                      }}
+                      onCancel={() => setHeard(null)}
+                    />
+                  ) : activeJob ? (
+                    <>
+                      {!needsYou && (
+                        <LastResult job={activeJob} open={detailsOpen} onToggle={() => setDetailsOpen((o) => !o)} />
+                      )}
+                      {(needsYou || detailsOpen) && (
+                        <ActiveJobCard
+                          job={activeJob}
+                          api={api}
+                          onError={handleError}
+                          onUpdate={(j) => {
+                            setJobs((l) => upsertJob(l, j));
+                            setSelectedJob(j);
+                          }}
+                          onNewJob={submit}
+                        />
+                      )}
+                    </>
+                  ) : null
+                }
                 orbState={orbState}
                 handsFree={handsFree}
                 micMode={handsFree.on ? "handsfree" : mic.mode}
@@ -492,7 +524,9 @@ function Remote({ api, email, theme, onToggleTheme, onSessionLost, onLogout, onU
               <CommandHistory
                 jobs={jobs}
                 onSelectJob={(j) => {
+                  openNext.current = true;
                   setSelectedJob(j);
+                  setDetailsOpen(true);
                   setNavTab("home");
                 }}
               />
@@ -524,7 +558,7 @@ function Remote({ api, email, theme, onToggleTheme, onSessionLost, onLogout, onU
                 <div className="settings-panel-body">
                   <div className="settings-row">
                     <span className="settings-label">Account</span>
-                    <span className="settings-value">{email || "Secret Key Paired"}</span>
+                    <span className="settings-value">{api.demo ? "Demo visitor" : email || "Secret Key Paired"}</span>
                   </div>
                   <div className="settings-actions-group">
                     <button
@@ -535,23 +569,23 @@ function Remote({ api, email, theme, onToggleTheme, onSessionLost, onLogout, onU
                       Command Capabilities Guide
                     </button>
                     {/* Same-origin GET: the HttpOnly session/device cookies authenticate the download. */}
-                    <a className="btn-settings-action" href="/audit/export?format=csv&days=30" download>
-                      Download audit log (30 days, CSV)
-                    </a>
-                    <button
-                      type="button"
-                      className="btn-settings-action"
-                      onClick={onUnpair}
-                    >
-                      Unpair Device
-                    </button>
-                    <button
-                      type="button"
-                      className="btn-settings-action btn-danger"
-                      onClick={onLogout}
-                    >
-                      Sign Out
-                    </button>
+                    {api.demo ? (
+                      <a className="btn-settings-action" href="/">
+                        Leave the demo
+                      </a>
+                    ) : (
+                      <>
+                        <a className="btn-settings-action" href="/audit/export?format=csv&days=30" download>
+                          Download audit log (30 days, CSV)
+                        </a>
+                        <button type="button" className="btn-settings-action" onClick={onUnpair}>
+                          Unpair Device
+                        </button>
+                        <button type="button" className="btn-settings-action btn-danger" onClick={onLogout}>
+                          Sign Out
+                        </button>
+                      </>
+                    )}
                   </div>
                 </div>
               </div>

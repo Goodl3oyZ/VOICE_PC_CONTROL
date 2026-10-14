@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { isDemo } from "./demo/demoApi";
 
 export type MicState = "idle" | "recording" | "denied" | "unsupported" | "insecure";
 
@@ -7,6 +8,7 @@ const MIME_CANDIDATES = ["audio/webm;codecs=opus", "audio/webm", "audio/mp4", "a
 /** Push-to-talk and Tap-to-talk recorder with Web Audio real-time volume detection. */
 export function useRecorder(onAudio: (blob: Blob) => void) {
   const [state, setState] = useState<MicState>(() => {
+    if (isDemo()) return "idle";
     if (!window.isSecureContext) return "insecure";
     if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === "undefined") return "unsupported";
     return "idle";
@@ -82,6 +84,13 @@ export function useRecorder(onAudio: (blob: Blob) => void) {
   }, []);
 
   const start = useCallback(async () => {
+    if (isDemo()) {
+      // Demo: no microphone permission, no audio; the demo client "hears" a sample sentence.
+      if (state === "recording") return;
+      startedAt.current = Date.now();
+      setState("recording");
+      return;
+    }
     if (state === "recording" || state === "insecure" || state === "unsupported") return;
     let stream: MediaStream;
     try {
@@ -151,11 +160,17 @@ export function useRecorder(onAudio: (blob: Blob) => void) {
   }, [state, onAudio, setupAudioAnalysis, cleanupAudioAnalysis]);
 
   const stop = useCallback(() => {
+    if (isDemo()) {
+      if (startedAt.current) onAudio(new Blob());
+      startedAt.current = 0;
+      setState("idle");
+      return;
+    }
     if (recRef.current?.state === "recording") {
       recRef.current.stop();
     }
     recRef.current = null;
-  }, []);
+  }, [onAudio]);
 
   const toggle = useCallback(() => {
     if (state === "recording") {

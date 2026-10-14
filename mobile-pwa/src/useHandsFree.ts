@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { Job, WakeResult } from "./api";
 import { SegmentDetector, downsample, encodeWav } from "./vad";
+import { isDemo } from "./demo/demoApi";
 
 export type HandsFreeState = "off" | "starting" | "waiting" | "hearing" | "sending" | "armed" | "error";
 
@@ -31,6 +32,11 @@ export function useHandsFree(
   }, []);
 
   const start = useCallback(async () => {
+    if (isDemo()) {
+      setError("Hands-free needs the real app (it keeps the microphone open)");
+      setState("error");
+      return;
+    }
     setError(null);
     setState("starting");
     try {

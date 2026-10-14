@@ -294,6 +294,14 @@ def create_app(orch: Orchestrator, store: SqliteStore, broadcaster: Broadcaster,
         await hub.attach(ws)
 
     if static_dir and Path(static_dir).is_dir():
+        index = Path(static_dir) / "index.html"
+
+        @app.get("/demo", include_in_schema=False)
+        async def demo_page() -> Response:
+            """Public demo: the same app with made-up data built in; it never calls the API, so it needs no
+            sign-in and cannot reach the PC."""
+            return Response(index.read_bytes(), media_type="text/html")
+
         app.mount("/", StaticFiles(directory=str(static_dir), html=True), name="pwa")
 
     return app
