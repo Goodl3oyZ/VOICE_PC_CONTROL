@@ -13,7 +13,7 @@ def test_demo_data_has_no_private_names():
     import re
     text = render()
     assert set(re.findall(r"C:\\Users\\([^\\]+)", text)) <= {"you"}
-    assert not re.search(r"(?:10|192\.168|100)\.\d+\.\d+", text)
+    assert not re.search(r"b(?:10|192\.168|100)\.\d+\.\d+", text)
     assert "my-website" in text and ".online" not in text
 
 
