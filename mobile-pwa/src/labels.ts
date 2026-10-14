@@ -135,3 +135,54 @@ export function diffLineKind(line: string): DiffLineKind {
   if (line.startsWith("-")) return "del";
   return "ctx";
 }
+
+/** Activity timeline: what happened, in words (never a tool name). */
+export function jobHeadline(job: Job): string {
+  if (job.state === "done") return job.summary || job.text || "Done";
+  if (job.state === "cancelled") return job.error ? `Cancelled: ${job.error}` : "Cancelled";
+  if (job.state === "failed") return job.error || job.summary || "That didn't work";
+  if (job.state === "clarifying") return job.question || STATE_LABEL.clarifying;
+  return STATE_LABEL[job.state];
+}
+
+export type JobKind = "media" | "skip" | "volume" | "search" | "app" | "screen" | "power" | "code" | "status" | "chat";
+
+const KIND_BY_TOOL: Record<string, JobKind> = {
+  youtube_play: "media", youtube_skip_ad: "skip", obs_control: "screen", obs_start_stream: "screen",
+  web_search: "search", search_web: "search", open_result: "search",
+  look_at_screen: "screen", describe_screen: "screen", wake_pc: "power", stop_all: "power", get_status: "status",
+};
+
+/** Picks the timeline icon from the last tool the job used. */
+export function jobKind(job: Job): JobKind {
+  const step = job.steps[job.steps.length - 1] ?? (job.pending ? { tool: job.pending.tool, arguments: job.pending.arguments } : null);
+  if (!step) return "chat";
+  const { tool, arguments: args } = step;
+  if (tool === "media_control") {
+    const action = String(args.action ?? "");
+    if (action === "next" || action === "previous") return "skip";
+    if (action.startsWith("volume") || action === "mute") return "volume";
+    return "media";
+  }
+  if (KIND_BY_TOOL[tool]) return KIND_BY_TOOL[tool];
+  if (CODE_TOOLS.has(tool) || /project/.test(tool) || tool === "revert_changes") return "code";
+  return "app";
+}
+
+/** "Today", "Yesterday", or a short date, for the timeline's day headers. */
+export function dayLabel(timestampSeconds: number, now = new Date()): string {
+  const d = new Date(timestampSeconds * 1000);
+  const start = (x: Date) => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime();
+  const days = Math.round((start(now) - start(d)) / 86_400_000);
+  if (days === 0) return "Today";
+  if (days === 1) return "Yesterday";
+  return d.toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" });
+}
+
+export function formatClock(timestampSeconds: number): string {
+  try {
+    return new Date(timestampSeconds * 1000).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
+  } catch {
+    return "";
+  }
+}

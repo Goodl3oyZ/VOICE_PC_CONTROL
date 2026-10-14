@@ -3,6 +3,9 @@ import type { Job } from "./api";
 import {
   STATE_LABEL,
   codeContext,
+  dayLabel,
+  jobHeadline,
+  jobKind,
   diffLineKind,
   STATE_DESC,
   describeCall,
@@ -123,5 +126,35 @@ describe("codeContext (Phase 3)", () => {
     expect(["+++ b/a", "@@ -1 +1 @@", "+new", "-old", " same"].map(diffLineKind)).toEqual([
       "meta", "hunk", "add", "del", "ctx",
     ]);
+  });
+});
+
+describe("activity timeline", () => {
+  const full = (over: Partial<Job>) =>
+    ({ id: "x", state: "done", text: "play Drake", summary: "", error: null, question: null, pending: null, steps: [], ...over }) as Job;
+  const step = (tool: string, args: Record<string, unknown> = {}) => ({ tool, arguments: args, result: { ok: true, verified: true } });
+
+  it("says what happened, not the tool", () => {
+    expect(jobHeadline(full({ summary: "Playing Drake on YouTube" }))).toBe("Playing Drake on YouTube");
+    expect(jobHeadline(full({ state: "failed", error: "Chrome isn't open" }))).toBe("Chrome isn't open");
+    expect(jobHeadline(full({ state: "cancelled" }))).toBe("Cancelled");
+    expect(jobHeadline(full({ state: "running" }))).toBe(STATE_LABEL.running);
+  });
+
+  it("picks an icon from the last step", () => {
+    expect(jobKind(full({ steps: [step("media_control", { action: "next" })] }))).toBe("skip");
+    expect(jobKind(full({ steps: [step("media_control", { action: "mute" })] }))).toBe("volume");
+    expect(jobKind(full({ steps: [step("web_search"), step("open_result")] }))).toBe("search");
+    expect(jobKind(full({ steps: [step("social_open")] }))).toBe("app");
+    expect(jobKind(full({ steps: [step("edit_file")] }))).toBe("code");
+    expect(jobKind(full({}))).toBe("chat");
+  });
+
+  it("groups by day", () => {
+    const now = new Date(2026, 9, 14, 10, 0);
+    const at = (d: Date) => d.getTime() / 1000;
+    expect(dayLabel(at(new Date(2026, 9, 14, 0, 5)), now)).toBe("Today");
+    expect(dayLabel(at(new Date(2026, 9, 13, 23, 50)), now)).toBe("Yesterday");
+    expect(dayLabel(at(new Date(2026, 9, 10, 12, 0)), now)).toMatch(/10 Oct/);
   });
 });

@@ -4388,3 +4388,159 @@ html, body {
   text-align: center;
   font-size: 0.9rem;
 }
+
+/* ── Activity timeline (owner feedback 2026-10-14) ─────────────────────── */
+.tl {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.tl-title {
+  margin: 0;
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.tl-search-icon {
+  position: absolute;
+  left: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--text-muted);
+  pointer-events: none;
+}
+
+.tl-search-input {
+  padding-left: 36px;
+  min-height: 42px;
+  font-size: 0.9rem;
+}
+
+.tl-day {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.tl-day-label {
+  margin: 4px 4px 0;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.tl-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  border-radius: var(--radius-lg);
+  background: var(--bg-card);
+  box-shadow: 0 0 0 1px var(--border-subtle);
+  overflow: hidden;
+}
+
+.tl-list > li + li {
+  border-top: 1px solid var(--border-subtle);
+}
+
+.tl-item {
+  width: 100%;
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 12px 14px;
+  text-align: left;
+  color: inherit;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  cursor: pointer;
+}
+
+.tl-item:hover,
+.tl-item:focus-visible {
+  background: var(--bg-hover);
+}
+
+.tl-icon {
+  flex: none;
+  width: 36px;
+  height: 36px;
+  border-radius: var(--radius-full);
+  display: grid;
+  place-items: center;
+  color: var(--cyan-primary);
+  background: var(--cyan-muted);
+}
+
+.tone-bad .tl-icon { color: var(--color-danger); background: var(--color-danger-bg); }
+.tone-wait .tl-icon { color: var(--color-warning); background: var(--color-warning-bg); }
+.tone-busy .tl-icon { color: var(--violet-primary); background: var(--violet-muted); animation: tl-pulse 1.4s ease-in-out infinite; }
+
+@keyframes tl-pulse {
+  50% { opacity: 0.55; }
+}
+
+.tl-body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.tl-headline {
+  font-size: 0.95rem;
+  font-weight: 600;
+  line-height: 1.35;
+  color: var(--text-primary);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+}
+
+.tone-bad .tl-headline { color: var(--color-danger); }
+
+.tl-said {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tl-cta {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--color-warning);
+}
+
+.tl-meta {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding-top: 2px;
+  color: var(--text-muted);
+}
+
+.tl-time {
+  font-size: 0.78rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.tl-chevron {
+  opacity: 0.5;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tone-busy .tl-icon { animation: none; }
+}

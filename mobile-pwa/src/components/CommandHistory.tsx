@@ -1,15 +1,19 @@
-import { useState, useMemo } from "react";
+import { useMemo, useState, type ComponentType } from "react";
 import type { Job } from "../api";
-import { STATE_LABEL, formatDuration, formatTime, isActive } from "../labels";
+import { dayLabel, formatClock, isActive, jobHeadline, jobKind, type JobKind } from "../labels";
 import {
   AlertCircleIcon,
-  CheckCircleIcon,
-  ChevronDownIcon,
   ChevronRightIcon,
-  ClockIcon,
   CpuIcon,
-  HistoryIcon,
+  GridIcon,
+  MonitorIcon,
+  NextIcon,
+  PlayPauseIcon,
+  PowerIcon,
+  SearchIcon,
   SparklesIcon,
+  TerminalIcon,
+  VolumeIcon,
 } from "./Icons";
 
 interface CommandHistoryProps {
@@ -17,238 +21,117 @@ interface CommandHistoryProps {
   onSelectJob?: (job: Job) => void;
 }
 
-type FilterTab = "all" | "active" | "done" | "failed";
+const KIND_ICON: Record<JobKind, ComponentType<{ size?: number }>> = {
+  media: PlayPauseIcon,
+  skip: NextIcon,
+  volume: VolumeIcon,
+  search: SearchIcon,
+  app: GridIcon,
+  screen: MonitorIcon,
+  power: PowerIcon,
+  code: TerminalIcon,
+  status: CpuIcon,
+  chat: SparklesIcon,
+};
 
+/** Activity (owner feedback 2026-10-14): a timeline by day that says what happened, not which tool ran. */
 export function CommandHistory({ jobs, onSelectJob }: CommandHistoryProps) {
-  const [filter, setFilter] = useState<FilterTab>("all");
   const [search, setSearch] = useState("");
-  const [expandedId, setExpandedId] = useState<string | null>(null);
 
-  const filteredJobs = useMemo(() => {
-    return jobs.filter((j) => {
-      // Filter tab
-      if (filter === "active" && !isActive(j)) return false;
-      if (filter === "done" && j.state !== "done") return false;
-      if (filter === "failed" && j.state !== "failed" && j.state !== "cancelled") return false;
-
-      // Search query
-      if (search.trim()) {
-        const q = search.toLowerCase();
-        const textMatch = (j.text || "").toLowerCase().includes(q);
-        const summaryMatch = (j.summary || "").toLowerCase().includes(q);
-        const toolMatch = j.steps.some((s) => s.tool.toLowerCase().includes(q));
-        if (!textMatch && !summaryMatch && !toolMatch) return false;
-      }
-      return true;
-    });
-  }, [jobs, filter, search]);
-
-  const toggleExpand = (id: string) => {
-    setExpandedId((prev) => (prev === id ? null : id));
-  };
+  const days = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    const groups: { label: string; jobs: Job[] }[] = [];
+    for (const j of jobs) {
+      if (q && !`${j.text} ${j.summary} ${j.error ?? ""}`.toLowerCase().includes(q)) continue;
+      const label = dayLabel(j.created_at);
+      const last = groups[groups.length - 1];
+      if (last?.label === label) last.jobs.push(j);
+      else groups.push({ label, jobs: [j] });
+    }
+    return groups;
+  }, [jobs, search]);
 
   return (
-    <section className="history-section" aria-label="Command history">
-      <div className="history-header">
-        <div className="history-title-group">
-          <HistoryIcon size={18} />
-          <h2>Recent commands</h2>
-          <span className="count-pill">{jobs.length}</span>
-        </div>
+    <section className="tl" aria-label="Activity">
+      <h2 className="tl-title">Activity</h2>
 
-        {/* Filter Tabs */}
-        <div className="filter-tabs-row">
-          <button
-            type="button"
-            className={`filter-tab-btn ${filter === "all" ? "active" : ""}`}
-            onClick={() => setFilter("all")}
-          >
-            All
-          </button>
-          <button
-            type="button"
-            className={`filter-tab-btn ${filter === "active" ? "active" : ""}`}
-            onClick={() => setFilter("active")}
-          >
-            Active
-          </button>
-          <button
-            type="button"
-            className={`filter-tab-btn ${filter === "done" ? "active" : ""}`}
-            onClick={() => setFilter("done")}
-          >
-            Done
-          </button>
-          <button
-            type="button"
-            className={`filter-tab-btn ${filter === "failed" ? "active" : ""}`}
-            onClick={() => setFilter("failed")}
-          >
-            Issues
-          </button>
-        </div>
-      </div>
-
-      {/* Search Bar */}
       {jobs.length > 3 && (
         <div className="history-search-bar">
+          <SearchIcon size={16} className="tl-search-icon" />
           <input
             type="text"
-            className="history-search-input"
+            className="history-search-input tl-search-input"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search commands or tools…"
-            aria-label="Search commands"
+            placeholder="Search what you said or what happened"
+            aria-label="Search activity"
           />
           {search && (
-            <button
-              type="button"
-              className="search-clear-btn"
-              onClick={() => setSearch("")}
-              aria-label="Clear search"
-            >
+            <button type="button" className="search-clear-btn" onClick={() => setSearch("")} aria-label="Clear search">
               ✕
             </button>
           )}
         </div>
       )}
 
-      {/* History List or Empty state */}
-      {filteredJobs.length === 0 ? (
+      {days.length === 0 ? (
         <div className="history-empty-state">
           {jobs.length === 0 ? (
             <>
               <SparklesIcon size={28} className="empty-icon" />
-              <p className="empty-title">No commands yet</p>
-              <p className="empty-sub">Press the microphone and speak English, or type a command above</p>
+              <p className="empty-title">Nothing yet</p>
+              <p className="empty-sub">What you ask your PC to do will show up here</p>
             </>
           ) : (
             <>
-              <p className="empty-title">Nothing matches the filter</p>
-              <button type="button" className="btn-reset-filter" onClick={() => { setFilter("all"); setSearch(""); }}>
-                Show all
+              <p className="empty-title">Nothing matches “{search}”</p>
+              <button type="button" className="btn-reset-filter" onClick={() => setSearch("")}>
+                Show everything
               </button>
             </>
           )}
         </div>
       ) : (
-        <ul className="history-items-list">
-          {filteredJobs.map((j) => {
-            const isExpanded = expandedId === j.id;
-            return (
-              <li
-                key={j.id}
-                className={`history-card state-${j.state} ${isExpanded ? "expanded" : ""}`}
-              >
-                <div
-                  className="history-summary-row"
-                  onClick={() => toggleExpand(j.id)}
-                  role="button"
-                  tabIndex={0}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter" || e.key === " ") {
-                      e.preventDefault();
-                      toggleExpand(j.id);
-                    }
-                  }}
-                  aria-expanded={isExpanded}
-                >
-                  <div className="history-left-meta">
-                    <span className="timestamp">
-                      <ClockIcon size={12} />
-                      {formatTime(j.created_at)}
-                    </span>
-                    <span className={`state-badge badge-${j.state}`}>
-                      {j.state === "done" ? (
-                        <CheckCircleIcon size={12} />
-                      ) : j.state === "failed" || j.state === "cancelled" ? (
-                        <AlertCircleIcon size={12} />
-                      ) : (
-                        <span className="pulse-indicator-small" />
-                      )}
-                      <span>{STATE_LABEL[j.state]}</span>
-                    </span>
-                  </div>
-
-                  <div className="history-command-text">
-                    {j.text || <em className="text-muted">(voice command)</em>}
-                  </div>
-
-                  <div className="history-right-meta">
-                    {j.timings_ms.total !== undefined && (
-                      <span className="duration-tag">{formatDuration(j.timings_ms.total)}</span>
-                    )}
-                    <span className="expand-chevron">
-                      {isExpanded ? <ChevronDownIcon size={16} /> : <ChevronRightIcon size={16} />}
-                    </span>
-                  </div>
-                </div>
-
-                {/* Quick tool pipeline preview */}
-                {j.steps && j.steps.length > 0 && !isExpanded && (
-                  <div className="history-tools-preview">
-                    <CpuIcon size={12} />
-                    <span>{j.steps.map((s) => s.tool).join(" → ")}</span>
-                  </div>
-                )}
-
-                {/* Expanded Details */}
-                {isExpanded && (
-                  <div className="history-expanded-body">
-                    {j.summary && (
-                      <div className="expanded-field">
-                        <span className="field-label">Result:</span>
-                        <div className="field-value summary-text">{j.summary}</div>
-                      </div>
-                    )}
-
-                    {j.error && (
-                      <div className="expanded-field error-field">
-                        <span className="field-label">Error:</span>
-                        <div className="field-value error-text">{j.error}</div>
-                      </div>
-                    )}
-
-                    {j.steps && j.steps.length > 0 && (
-                      <div className="expanded-field">
-                        <span className="field-label">Tool steps ({j.steps.length}):</span>
-                        <div className="expanded-steps-list">
-                          {j.steps.map((st, idx) => (
-                            <div key={idx} className="expanded-step-item">
-                              <span className="step-badge-tool">{st.tool}</span>
-                              {st.arguments && Object.keys(st.arguments).length > 0 && (
-                                <code className="step-args-preview">
-                                  {JSON.stringify(st.arguments)}
-                                </code>
-                              )}
-                              {st.result && (
-                                <span className={`step-status-chip ${st.result.ok ? "ok" : "fail"}`}>
-                                  {st.result.ok ? "OK" : "Failed"}
-                                </span>
-                              )}
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-
-                    {onSelectJob && (
-                      <div className="expanded-actions">
-                        <button
-                          type="button"
-                          className="btn-select-job"
-                          onClick={() => onSelectJob(j)}
-                        >
-                          Inspect this command
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                )}
-              </li>
-            );
-          })}
-        </ul>
+        days.map((day) => (
+          <div key={day.label} className="tl-day">
+            <h3 className="tl-day-label">{day.label}</h3>
+            <ul className="tl-list">
+              {day.jobs.map((j) => {
+                const failed = j.state === "failed" || j.state === "cancelled";
+                const waiting = j.state === "clarifying" || j.state === "awaiting_confirm";
+                const tone = failed ? "bad" : waiting ? "wait" : isActive(j) ? "busy" : "ok";
+                const Icon = failed ? AlertCircleIcon : KIND_ICON[jobKind(j)];
+                return (
+                  <li key={j.id}>
+                    <button
+                      type="button"
+                      className={`tl-item tone-${tone}`}
+                      onClick={() => onSelectJob?.(j)}
+                      title="Open details"
+                    >
+                      <span className="tl-icon" aria-hidden="true">
+                        <Icon size={18} />
+                      </span>
+                      <span className="tl-body">
+                        <span className="tl-headline">{jobHeadline(j)}</span>
+                        {j.text && (
+                          <span className="tl-said">
+                            {j.source === "audio" ? "You said" : "You typed"}: {j.text}
+                          </span>
+                        )}
+                        {waiting && <span className="tl-cta">Needs you — tap to answer</span>}
+                      </span>
+                      <span className="tl-meta">
+                        <time className="tl-time">{formatClock(j.created_at)}</time>
+                        <ChevronRightIcon size={16} className="tl-chevron" />
+                      </span>
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
+        ))
       )}
     </section>
   );

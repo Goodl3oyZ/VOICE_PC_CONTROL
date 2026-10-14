@@ -43,17 +43,19 @@ export class DemoApi extends Api {
     super();
     const now = Date.now() / 1000;
     this.jobsList = [
-      this.job("Next song", now - 40, "Skipped to the next song", "media_control"),
+      this.job("Next song", now - 40, "Skipped to the next song", "media_control", { action: "next" }),
       this.job("Open Chrome", now - 300, "Opened Chrome", "open_app"),
+      this.job("search lofi beats", now - 86_400 - 600, "Found 5 results for “lofi beats”", "web_search"),
+      this.job("Mute", now - 86_400 - 900, "Muted the PC", "media_control", { action: "mute" }),
     ];
   }
 
-  private job(text: string, at: number, summary: string, tool: string): Job {
+  private job(text: string, at: number, summary: string, tool: string, args: Record<string, unknown> = {}): Job {
     return {
       id: `demo-${++this.n}`, state: "done", source: "text", created_at: at, text, normalized: text.toLowerCase(),
       stt_confidence: null, question: null, pending: null, error: null, outcome: "done_verified", planner: "shortcut",
       timings_ms: { pc2: 400 + Math.round(Math.random() * 900) }, summary,
-      steps: [{ tool, arguments: {}, result: { ok: true, verified: true } }],
+      steps: [{ tool, arguments: args, result: { ok: true, verified: true } }],
     };
   }
 
